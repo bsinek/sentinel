@@ -20,8 +20,30 @@ portfolio construction -> simulation -> evaluation
 - research-first infrastructure  
 - reproducibility over speed  
 - incremental system complexity (avoid premature abstraction)  
-- avoid premature implementation of advanced quant methods; core quantitative modeling should be user-driven, with Claude primarily assisting infrastructure and scaffolding  
+- avoid premature implementation of advanced quant methods; core quantitative modeling should be user-driven, with Claude primarily assisting infrastructure and scaffolding
 
+## Frontend Engineering Constraints
+Color system:
+- Use a cohesive theme defined in global.css via CSS variables
+- Avoid ad-hoc colors and inconsistent palettes
+
+Structure:
+- Single-file pages are acceptable when appropriate
+- Avoid large, monolithic components that contain all UI logic and markup
+- Extract reusable or complex parts into components
+- Organize by clarity, not by premature abstraction
+- Keep component structure shallow and readable
+
+Complexity:
+- Keep the UI minimal and focused
+- Avoid unnecessary dependencies, frameworks, and abstractions
+- Prefer simple React + Next patterns
+- Build complexity incrementally
+
+Design quality:
+- Avoid generic, template-style, or AI-generated interfaces
+- Do not default to standard SaaS dashboard aesthetics
+- Aim for a cohesive, intentional interface suited to a research environment
 
 
 
