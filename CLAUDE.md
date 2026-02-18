@@ -1,27 +1,27 @@
-# Sentinel Project Context
+# Sentinel System Context
 
-Sentinel is a full-stack quant research and experimentation platform.
+Sentinel is a modular quant research environment for portfolio construction, simulation, and strategy experimentation.
+It is a research system, not a trading product or dashboard.
+Quantitative methods are implemented as independent modules and evaluated through a consistent experimentation pipeline.
 
-Primary capabilities:
-- portfolio optimization
-- Monte Carlo simulation
-- Brownian motion modeling
-- cointegration analysis
-- stat arb experimentation
-- neural network experimentation later
+## Core Workflow
+portfolio construction -> simulation -> evaluation
 
-System architecture direction:
-- Django + Django REST Framework (DRF) as system backbone
-- Postgres for persistent data
-- Celery + Redis for job orchestration
-- Quant engine as separate Python modules
-- Next.js frontend (replaceable, not core)
+## Architecture Direction
+- Django + Django REST Framework (DRF) for orchestration and experiment APIs  
+- Postgres for experiment data, configurations, and results  
+- Celery + Redis for asynchronous simulations and compute workloads  
+- Quant engine implemented as independent, modular Python components that integrate without modifying orchestration logic  
+- Frontend flexible and replaceable; visualization is not core to system operation  
 
-Claude should prioritize:
-- modular system design
-- separation of compute and backend
-- production-grade structure
-- experimentation flexibility
+## Engineering Principles
+- modular system design  
+- separation of compute and orchestration  
+- research-first infrastructure  
+- reproducibility over speed  
+- incremental system complexity (avoid premature abstraction)  
+- avoid premature implementation of advanced quant methods; core quantitative modeling should be user-driven, with Claude primarily assisting infrastructure and scaffolding  
+
 
 
 
