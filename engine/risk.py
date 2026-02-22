@@ -1,5 +1,31 @@
 import numpy as np
 
+def summary(portfolio_paths, dt, alpha=0.95, risk_free_rate=0.0):
+    """
+    Summarize all performance and risk metrics.
+
+    :param portfolio_paths: (n_simulations, n_steps) array of portfolio values
+    :param dt: time delta between steps in years (e.g. 1/252 for daily)
+    :param alpha: confidence level (default 0.95)
+    :param risk_free_rate: annualized risk-free rate as a decimal (default 0.0)
+    :returns: dict of performance and risk metrics
+    """
+    mdds = max_drawdowns(portfolio_paths)
+
+    return {
+        'mean_return': mean_return(portfolio_paths),
+        'median_return':  median_return(portfolio_paths),
+        'median_cagr': cagrs(portfolio_paths, dt).mean(),
+        'volatility': volatility(portfolio_paths, dt),
+        'sharpe': sharpe(portfolio_paths, dt, risk_free_rate=risk_free_rate),
+        'var': var(portfolio_paths, alpha=alpha),
+        'cvar': cvar(portfolio_paths, alpha=alpha),
+        'mean_mdd': mdds.mean(),
+        'worst_mdd': mdds.min(),
+        'prob_loss': prob_loss(portfolio_paths),
+    }
+
+
 def _calculate_terminal_returns(portfolio_paths):
     """
     Compute the total return for each path from first to last time step.
@@ -38,44 +64,7 @@ def median_return(portfolio_paths):
     return np.median(_calculate_terminal_returns(portfolio_paths))
 
 
-def var(portfolio_paths, alpha=0.95):
-    """
-    Compute Value at Risk (VaR) at the given confidence level.
-
-    Returns the minimum terminal return in the worst (1 - alpha) fraction of simulations.
-    E.g. at alpha=0.95, this is the 5th percentile of terminal returns.
-
-    :param portfolio_paths: (n_simulations, n_steps) array of portfolio values
-    :param alpha: confidence level (default 0.95)
-    :returns: scalar VaR as a decimal return (negative = loss)
-    """
-    portfolio_paths = np.asarray(portfolio_paths)
-
-    terminal_returns = _calculate_terminal_returns(portfolio_paths)
-    var = np.percentile(terminal_returns, (1 - alpha) * 100)
-    return var
-
-
-def cvar(portfolio_paths, alpha=0.95):
-    """
-    Compute Conditional Value at Risk (CVaR / Expected Shortfall) at the given confidence level.
-
-    Returns the mean terminal return across all simulations that fall at or below the VaR threshold.
-    Represents the expected loss in the tail beyond VaR.
-
-    :param portfolio_paths: (n_simulations, n_steps) array of portfolio values
-    :param alpha: confidence level (default 0.95)
-    :returns: scalar CVaR as a decimal return (negative = loss)
-    """
-    portfolio_paths = np.asarray(portfolio_paths)
-    
-    terminal_returns = _calculate_terminal_returns(portfolio_paths)
-    var_threshold = np.percentile(terminal_returns, (1 - alpha) * 100)
-    cvar = terminal_returns[terminal_returns <= var_threshold].mean()
-    return cvar
-
-
-def cagr(portfolio_paths, dt):
+def cagrs(portfolio_paths, dt):
     """
     Compute the Compound Annual Growth Rate (CAGR) for each simulation path.
 
@@ -126,7 +115,44 @@ def sharpe(portfolio_paths, dt, risk_free_rate=0.0):
     return (ann_return - risk_free_rate) / ann_vol
 
 
-def max_drawdown(portfolio_paths):
+def var(portfolio_paths, alpha=0.95):
+    """
+    Compute Value at Risk (VaR) at the given confidence level.
+
+    Returns the minimum terminal return in the worst (1 - alpha) fraction of simulations.
+    E.g. at alpha=0.95, this is the 5th percentile of terminal returns.
+
+    :param portfolio_paths: (n_simulations, n_steps) array of portfolio values
+    :param alpha: confidence level (default 0.95)
+    :returns: scalar VaR as a decimal return (negative = loss)
+    """
+    portfolio_paths = np.asarray(portfolio_paths)
+
+    terminal_returns = _calculate_terminal_returns(portfolio_paths)
+    var = np.percentile(terminal_returns, (1 - alpha) * 100)
+    return var
+
+
+def cvar(portfolio_paths, alpha=0.95):
+    """
+    Compute Conditional Value at Risk (CVaR / Expected Shortfall) at the given confidence level.
+
+    Returns the mean terminal return across all simulations that fall at or below the VaR threshold.
+    Represents the expected loss in the tail beyond VaR.
+
+    :param portfolio_paths: (n_simulations, n_steps) array of portfolio values
+    :param alpha: confidence level (default 0.95)
+    :returns: scalar CVaR as a decimal return (negative = loss)
+    """
+    portfolio_paths = np.asarray(portfolio_paths)
+    
+    terminal_returns = _calculate_terminal_returns(portfolio_paths)
+    var_threshold = np.percentile(terminal_returns, (1 - alpha) * 100)
+    cvar = terminal_returns[terminal_returns <= var_threshold].mean()
+    return cvar
+
+
+def max_drawdowns(portfolio_paths):
     """
     Compute the maximum drawdown for each simulation path.
 
