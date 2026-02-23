@@ -1,6 +1,6 @@
 import numpy as np
 
-def summary(portfolio_paths, dt, alpha=0.95, risk_free_rate=0.0):
+def summary(portfolio_paths: np.ndarray, dt: float, alpha: float = 0.95, risk_free_rate: float = 0.0) -> dict:
     """
     Summarize all performance and risk metrics.
 
@@ -26,7 +26,7 @@ def summary(portfolio_paths, dt, alpha=0.95, risk_free_rate=0.0):
     }
 
 
-def _calculate_terminal_returns(portfolio_paths):
+def _calculate_terminal_returns(portfolio_paths: np.ndarray) -> np.ndarray:
     """
     Compute the total return for each path from first to last time step.
 
@@ -40,7 +40,7 @@ def _calculate_terminal_returns(portfolio_paths):
     return (final - initial) / initial
 
 
-def mean_return(portfolio_paths):
+def mean_return(portfolio_paths: np.ndarray) -> float:
     """
     Compute the mean return across all simulation paths.
 
@@ -52,7 +52,7 @@ def mean_return(portfolio_paths):
     return _calculate_terminal_returns(portfolio_paths).mean()
 
 
-def median_return(portfolio_paths):
+def median_return(portfolio_paths: np.ndarray) -> float:
     """
     Compute the median return across all simulation paths.
 
@@ -64,7 +64,7 @@ def median_return(portfolio_paths):
     return np.median(_calculate_terminal_returns(portfolio_paths))
 
 
-def cagrs(portfolio_paths, dt):
+def cagrs(portfolio_paths: np.ndarray, dt: float) -> np.ndarray:
     """
     Compute the Compound Annual Growth Rate (CAGR) for each simulation path.
 
@@ -80,7 +80,7 @@ def cagrs(portfolio_paths, dt):
     return (final / initial) ** (1 / years) - 1
 
 
-def volatility(portfolio_paths, dt):
+def volatility(portfolio_paths: np.ndarray, dt: float) -> float:
     """
     Compute annualized volatility across all simulation paths.
 
@@ -98,7 +98,7 @@ def volatility(portfolio_paths, dt):
     return vol_per_step / np.sqrt(dt)
 
 
-def sharpe(portfolio_paths, dt, risk_free_rate=0.0):
+def sharpe(portfolio_paths: np.ndarray, dt: float, risk_free_rate: float = 0.0) -> float:
     """
     Compute the annualized Sharpe ratio across all simulation paths.
 
@@ -115,7 +115,7 @@ def sharpe(portfolio_paths, dt, risk_free_rate=0.0):
     return (ann_return - risk_free_rate) / ann_vol
 
 
-def var(portfolio_paths, alpha=0.95):
+def var(portfolio_paths: np.ndarray, alpha: float = 0.95) -> float:
     """
     Compute Value at Risk (VaR) at the given confidence level.
 
@@ -133,7 +133,7 @@ def var(portfolio_paths, alpha=0.95):
     return var
 
 
-def cvar(portfolio_paths, alpha=0.95):
+def cvar(portfolio_paths: np.ndarray, alpha: float = 0.95) -> float:
     """
     Compute Conditional Value at Risk (CVaR / Expected Shortfall) at the given confidence level.
 
@@ -152,7 +152,7 @@ def cvar(portfolio_paths, alpha=0.95):
     return cvar
 
 
-def max_drawdowns(portfolio_paths):
+def max_drawdowns(portfolio_paths: np.ndarray) -> np.ndarray:
     """
     Compute the maximum drawdown for each simulation path.
 
@@ -166,7 +166,7 @@ def max_drawdowns(portfolio_paths):
     return drawdowns.min(axis=1)
 
 
-def prob_loss(portfolio_paths):
+def prob_loss(portfolio_paths: np.ndarray) -> float:
     """
     Compute the probability of a loss across all simulation paths.
 
