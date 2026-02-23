@@ -13,12 +13,14 @@ def fetch_prices(tickers: list[str], start: str, end: str, interval: str = '1d')
     """
     raw = yf.download(tickers, start=start, end=end, interval=interval, auto_adjust=True)
     prices = raw['Close']
-    
-    # yfinance returns Series when only 1 ticker
-    if isinstance(raw.columns, pd.Series):
-        prices = raw[['Close']]
-        prices.columns = tickers
+
+    # yfinance returns a Series (not DataFrame) when downloading a single ticker
+    if isinstance(prices, pd.Series):
+        prices = prices.to_frame(name=tickers[0])
 
     prices = prices.ffill().dropna()
+
+    if prices.empty:
+        raise ValueError(f'no price data returned for tickers {tickers} in range {start} to {end}')
 
     return prices
