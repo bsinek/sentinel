@@ -2,52 +2,102 @@
 
 import { useState } from "react";
 
-interface PortfolioPosition {
+interface Position {
   symbol: string;
-  percentage: number;
+  allocation: number;
+}
+
+interface SimulationParams {
+  start: string;
+  end: string;
+  interval: "1d" | "1wk" | "1mo";
+  nSteps: string;
+  nSims: string;
+  alpha: string;
+  riskFreeRate: string;
 }
 
 const AVAILABLE_SYMBOLS = [
   "AAPL", "MSFT", "GOOGL", "AMZN", "META", 
   "NVDA", "TSLA", "BRK.B", "JPM", "V",
-  "JNJ", "WMT", "PG", "MA", "UNH"
+  "JNJ", "WMT", "PG", "MA", "UNH", "SPY"
 ];
 
 export default function MonteCarloPage() {
-  const [positions, setPositions] = useState<PortfolioPosition[]>([]);
+  const [positions, setPositions] = useState<Position[]>([]);
   const [selectedSymbol, setSelectedSymbol] = useState<string>("");
-  const [percentage, setPercentage] = useState<string>("");
+  const [allocation, setAllocation] = useState<string>("");
+  const [params, setParams] = useState<SimulationParams>({
+    start: "2022-01-01",
+    end: "2026-01-01",
+    interval: "1d",
+    nSteps: "252",
+    nSims: "1000",
+    alpha: "0.95",
+    riskFreeRate: "0.0",
+  });
 
-  const totalAllocation = positions.reduce((sum, pos) => sum + pos.percentage, 0);
+  const totalAllocation = positions.reduce((sum, pos) => sum + pos.allocation, 0);
   const remainingAllocation = 100 - totalAllocation;
 
   const addPosition = () => {
-    if (!selectedSymbol || !percentage) return;
+    if (!selectedSymbol || !allocation) return;
     
-    const percentValue = parseFloat(percentage);
-    if (isNaN(percentValue) || percentValue <= 0) return;
-    if (totalAllocation + percentValue > 100) return;
+    const allocationValue = parseFloat(allocation);
+    if (isNaN(allocationValue) || allocationValue <= 0) return;
+    if (totalAllocation + allocationValue > 100) return;
 
     // Check if symbol already exists
     if (positions.some(p => p.symbol === selectedSymbol)) return;
 
     setPositions([...positions, { 
       symbol: selectedSymbol, 
-      percentage: percentValue 
+      allocation: Math.round(allocationValue * 10) / 10
     }]);
     setSelectedSymbol("");
-    setPercentage("");
+    setAllocation("");
   };
 
   const removePosition = (symbol: string) => {
     setPositions(positions.filter(p => p.symbol !== symbol));
   };
 
-  const canRunSimulation = positions.length > 0 && Math.abs(totalAllocation - 100) < 0.01;
+  const fmtPct = (v: number | null, d = 2) =>
+    v == null || !isFinite(v) ? "—" : `${(v * 100).toFixed(d)}%`;
+  const fmtNum = (v: number | null, d = 3) =>
+    v == null || !isFinite(v) ? "—" : v.toFixed(d);
 
-  const runSimulation = () => {
-    // TODO: Hook up to backend API
-    console.log("Running Monte Carlo simulation with positions:", positions);
+  const canRunSimulation =
+    positions.length > 0 &&
+    totalAllocation === 100 &&
+    !!params.start &&
+    !!params.end &&
+    parseInt(params.nSteps) > 0 &&
+    parseInt(params.nSims) > 0;
+
+  const runSimulation = async () => {
+    const tickers = positions.map(p => p.symbol)
+    const weights = positions.map(p => p.allocation / 100)
+
+    const res = await fetch("http://localhost:8000/simulate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tickers,
+        weights,
+        start: params.start,
+        end: params.end,
+        interval: params.interval,
+        n_steps: parseInt(params.nSteps),
+        n_sims: parseInt(params.nSims),
+        alpha: parseFloat(params.alpha),
+        risk_free_rate: parseFloat(params.riskFreeRate),
+        include: ["metrics"],
+      }),
+    })
+
+    const data = await res.json()
+    console.log("Simulation results:", data)
   };
 
   return (
@@ -84,8 +134,8 @@ export default function MonteCarloPage() {
 
             <input
               type="number"
-              value={percentage}
-              onChange={(e) => setPercentage(e.target.value)}
+              value={allocation}
+              onChange={(e) => setAllocation(e.target.value)}
               placeholder="Allocation %"
               min="0"
               max={remainingAllocation}
@@ -95,8 +145,8 @@ export default function MonteCarloPage() {
 
             <button
               onClick={addPosition}
-              disabled={!selectedSymbol || !percentage || parseFloat(percentage) > remainingAllocation}
-              className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 disabled:opacity-30 disabled:cursor-not-allowed rounded transition-colors"
+              disabled={!selectedSymbol || !allocation || parseFloat(allocation) > remainingAllocation}
+              className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 disabled:opacity-30 disabled:cursor-not-allowed rounded transition-colors cursor-pointer"
             >
               Add Position
             </button>
@@ -105,7 +155,7 @@ export default function MonteCarloPage() {
           {/* Allocation Status */}
           <div className="mb-4 text-sm">
             <span className={remainingAllocation === 0 ? "text-green-500" : "opacity-60"}>
-              Allocated: {totalAllocation.toFixed(1)}% / 100%
+              Allocated: {totalAllocation.toFixed(1)}% / 100.0%
             </span>
             {remainingAllocation > 0 && (
               <span className="ml-4 opacity-40">
@@ -134,7 +184,7 @@ export default function MonteCarloPage() {
                 ) : positions.map((position) => (
                   <tr key={position.symbol} className="h-10 border-b border-neutral-800 last:border-b-0">
                     <td className="px-4 py-2 font-mono">{position.symbol}</td>
-                    <td className="px-4 py-2 text-right font-mono">{position.percentage.toFixed(1)}%</td>
+                    <td className="px-4 py-2 text-right font-mono">{position.allocation.toFixed(1)}%</td>
                     <td className="w-20 px-4 py-2 text-right">
                       <button
                         onClick={() => removePosition(position.symbol)}
@@ -150,19 +200,109 @@ export default function MonteCarloPage() {
           </div>
         </div>
 
+        {/* Simulation Parameters */}
+        <div className="mb-8">
+          <h2 className="text-lg font-medium mb-4">Simulation Parameters</h2>
+          <div className="grid grid-cols-2 gap-x-6 gap-y-4 max-w-lg">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs opacity-50 uppercase tracking-wide">Start Date</label>
+              <input
+                type="date"
+                value={params.start}
+                onChange={(e) => setParams({ ...params, start: e.target.value })}
+                className="px-3 py-2 border border-neutral-700 bg-neutral-900 rounded focus:outline-none focus:ring-1 focus:ring-neutral-500 text-sm"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs opacity-50 uppercase tracking-wide">End Date</label>
+              <input
+                type="date"
+                value={params.end}
+                onChange={(e) => setParams({ ...params, end: e.target.value })}
+                className="px-3 py-2 border border-neutral-700 bg-neutral-900 rounded focus:outline-none focus:ring-1 focus:ring-neutral-500 text-sm"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs opacity-50 uppercase tracking-wide">Interval</label>
+              <select
+                value={params.interval}
+                onChange={(e) => setParams({ ...params, interval: e.target.value as SimulationParams["interval"] })}
+                className="px-3 py-2 border border-neutral-700 bg-neutral-900 rounded focus:outline-none focus:ring-1 focus:ring-neutral-500 text-sm"
+              >
+                <option value="1d">Daily</option>
+                <option value="1wk">Weekly</option>
+                <option value="1mo">Monthly</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs opacity-50 uppercase tracking-wide">Simulation Steps</label>
+              <input
+                type="number"
+                value={params.nSteps}
+                onChange={(e) => setParams({ ...params, nSteps: e.target.value })}
+                min="1"
+                step="1"
+                className="px-3 py-2 border border-neutral-700 bg-neutral-900 rounded focus:outline-none focus:ring-1 focus:ring-neutral-500 text-sm"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs opacity-50 uppercase tracking-wide">Simulations</label>
+              <input
+                type="number"
+                value={params.nSims}
+                onChange={(e) => setParams({ ...params, nSims: e.target.value })}
+                min="1"
+                step="100"
+                className="px-3 py-2 border border-neutral-700 bg-neutral-900 rounded focus:outline-none focus:ring-1 focus:ring-neutral-500 text-sm"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs opacity-50 uppercase tracking-wide">Alpha (VaR/CVaR)</label>
+              <input
+                type="number"
+                value={params.alpha}
+                onChange={(e) => setParams({ ...params, alpha: e.target.value })}
+                min="0.01"
+                max="0.99"
+                step="0.01"
+                className="px-3 py-2 border border-neutral-700 bg-neutral-900 rounded focus:outline-none focus:ring-1 focus:ring-neutral-500 text-sm"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs opacity-50 uppercase tracking-wide">Risk-Free Rate</label>
+              <input
+                type="number"
+                value={params.riskFreeRate}
+                onChange={(e) => setParams({ ...params, riskFreeRate: e.target.value })}
+                min="0"
+                step="0.001"
+                className="px-3 py-2 border border-neutral-700 bg-neutral-900 rounded focus:outline-none focus:ring-1 focus:ring-neutral-500 text-sm"
+              />
+            </div>
+          </div>
+        </div>
+
         {/* Simulation Controls */}
         <div className="pt-6 border-t border-neutral-800">
           <button
             onClick={runSimulation}
             disabled={!canRunSimulation}
-            className="px-6 py-3 bg-neutral-100 text-neutral-900 hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed rounded font-medium transition-colors"
+            className="px-6 py-3 bg-neutral-100 text-neutral-900 transition-all hover:scale-101 hover:bg-green-100 disabled:opacity-30 disabled:cursor-not-allowed rounded font-medium cursor-pointer active:scale-99"
           >
             Run Monte Carlo Simulation
           </button>
           
           {!canRunSimulation && positions.length > 0 && (
             <p className="mt-2 text-sm text-red-400">
-              Portfolio must total 100% to run simulation
+              {totalAllocation !== 100
+                ? "Portfolio must total 100% to run simulation"
+                : !params.start || !params.end
+                ? "Start and end dates are required"
+                : parseInt(params.nSteps) <= 0
+                ? "Step count must be greater than 0"
+                : parseInt(params.nSims) <= 0
+                ? "Simulation count must be greater than 0"
+                : null}
             </p>
           )}
           
