@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
 from .schemas import SimulationRequest, SimulationResponse, MetricsResult
 from engine.data import fetch_prices
@@ -8,6 +9,13 @@ from engine.portfolio import aggregate_portfolio
 from engine.risk import summary
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=['http://localhost:3000'],
+    allow_methods=['*'],
+    allow_headers=['*'],
+)
 
 @app.get('/health')
 def health():
