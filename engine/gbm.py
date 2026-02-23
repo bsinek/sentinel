@@ -1,12 +1,12 @@
 import numpy as np
 
-def simulate_gbm(S0, mu, cov, n_steps, n_sims):
+def simulate_gbm(S0: np.ndarray, mu: np.ndarray, cov: np.ndarray, n_steps: int, n_sims: int) -> np.ndarray:
     """
     simulate geometric brownian motion via monte carlo simulations
     
-    :param S0: initial asset prices
-    :param mu: mean log asset drifts
-    :param cov: covariance matrix
+    :param S0: (n_assets,) array of initial asset prices
+    :param mu: (n_assets,) array of mean log asset drifts (per step, not annualized)
+    :param cov: (n_assets, n_assets) covariance matrix of log returns (per step)
     :param n_steps: number of time steps
     :param n_sims: number of simulations
     :returns: (n_sims, n_steps+1, n_assets) array of simulated price paths

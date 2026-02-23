@@ -1,11 +1,12 @@
 import numpy as np
 
-def aggregate_portfolio(price_paths, weights):
+def aggregate_portfolio(price_paths: np.ndarray, weights: np.ndarray) -> np.ndarray:
     """
     aggregates asset prices paths into portfolio price paths
     
-    :param price_paths: price paths of assets
-    :param weights: portfolio allocation weights
+    :param price_paths: (n_sims, n_steps+1, n_assets) array of asset price paths
+    :param weights: (n_assets,) array of portfolio allocation weights
+    :returns: (n_sims, n_steps+1) array of portfolio value paths
     """
 
     # convert to numpy arrays
