@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import PathChart from "./PathChart";
 
 interface Position {
   symbol: string;
@@ -41,6 +42,7 @@ export default function MonteCarloPage() {
   const [selectedSymbol, setSelectedSymbol] = useState<string>("");
   const [allocation, setAllocation] = useState<string>("");
   const [metrics, setMetrics] = useState<MetricsResult | null>(null);
+  const [portfolioPaths, setPortfolioPaths] = useState<number[][] | null>(null);
   const [loading, setLoading] = useState(false);
   const [params, setParams] = useState<SimulationParams>({
     start: "2022-01-01",
@@ -93,6 +95,7 @@ export default function MonteCarloPage() {
   const runSimulation = async () => {
     setLoading(true);
     setMetrics(null);
+    setPortfolioPaths(null);
     const tickers = positions.map(p => p.symbol)
     const weights = positions.map(p => p.allocation / 100)
 
@@ -110,12 +113,13 @@ export default function MonteCarloPage() {
           n_sims: parseInt(params.nSims),
           alpha: parseFloat(params.alpha),
           risk_free_rate: parseFloat(params.riskFreeRate),
-          include: ["metrics"],
+          include: ["portfolio_paths", "metrics"],
         }),
       })
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail ?? "Simulation failed");
       setMetrics(data.metrics);
+      if (data.portfolio_paths) setPortfolioPaths(data.portfolio_paths);
     } finally {
       setLoading(false);
     }
@@ -335,9 +339,19 @@ export default function MonteCarloPage() {
         </div>
 
         {/* Results */}
-        {metrics && (
+        {(metrics || portfolioPaths) && (
           <div className="mt-8 pt-8 border-t border-neutral-800">
-            <h2 className="text-lg font-medium mb-4">Results</h2>
+            <h2 className="text-lg font-medium mb-6">Results</h2>
+
+            {/* Portfolio Paths Chart */}
+            {portfolioPaths && (
+              <div className="mb-8">
+                <p className="text-xs opacity-40 uppercase tracking-wide mb-3">Portfolio Value Paths</p>
+                <PathChart paths={portfolioPaths} />
+              </div>
+            )}
+
+            {metrics && (
             <div className="grid grid-cols-2 gap-x-12 gap-y-3 max-w-lg text-sm">
               <div className="flex justify-between">
                 <span className="opacity-50">Mean Return</span>
@@ -380,6 +394,7 @@ export default function MonteCarloPage() {
                 <span className="font-mono">{fmtPct(metrics.worst_mdd)}</span>
               </div>
             </div>
+            )}
           </div>
         )}
       </div>
