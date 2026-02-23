@@ -1,6 +1,6 @@
 import numpy as np
 
-def aggregate_portfolio(price_paths: np.ndarray, weights: np.ndarray) -> np.ndarray:
+def aggregate_portfolio(price_paths: np.ndarray, weights: np.ndarray | None = None) -> np.ndarray:
     """
     aggregates asset prices paths into portfolio price paths
     
@@ -8,20 +8,21 @@ def aggregate_portfolio(price_paths: np.ndarray, weights: np.ndarray) -> np.ndar
     :param weights: (n_assets,) array of portfolio allocation weights
     :returns: (n_sims, n_steps+1) array of portfolio value paths
     """
-
-    # convert to numpy arrays
+    # convert to numpy array
     price_paths = np.asarray(price_paths)
-    weights = np.asarray(weights)
 
-    # input validation
-    if price_paths.ndim != 3:
-        raise ValueError('price_paths must have shape (n_sims, n_steps + 1, n_assets)')
-    
-    if weights.ndim != 1:
-        raise ValueError('weights must have shape of (n_assets,)')
-    
-    if len(weights) != price_paths.shape[2]:
-        raise ValueError('weights length must match number of assets')
+    n_assets = price_paths.shape[2]
+
+    if weights is None:
+        weights = np.ones(n_assets) / n_assets
+    else:
+        # convert to numpy array
+        weights = np.asarray(weights)
+        
+        if len(weights) != n_assets:
+            raise ValueError('weights length must match number of assets')
+        if not np.isclose(weights.sum(), 1.0):
+            raise ValueError('weights must sum to 1')
     
     # matrix mutliplication along assets axis
     portfolio_paths = price_paths @ weights
