@@ -7,6 +7,19 @@ interface Position {
   allocation: number;
 }
 
+interface MetricsResult {
+  mean_return: number;
+  median_return: number;
+  median_cagr: number;
+  volatility: number;
+  sharpe: number;
+  var: number;
+  cvar: number;
+  mean_mdd: number;
+  worst_mdd: number;
+  prob_loss: number;
+}
+
 interface SimulationParams {
   start: string;
   end: string;
@@ -27,6 +40,8 @@ export default function MonteCarloPage() {
   const [positions, setPositions] = useState<Position[]>([]);
   const [selectedSymbol, setSelectedSymbol] = useState<string>("");
   const [allocation, setAllocation] = useState<string>("");
+  const [metrics, setMetrics] = useState<MetricsResult | null>(null);
+  const [loading, setLoading] = useState(false);
   const [params, setParams] = useState<SimulationParams>({
     start: "2022-01-01",
     end: "2026-01-01",
@@ -76,28 +91,34 @@ export default function MonteCarloPage() {
     parseInt(params.nSims) > 0;
 
   const runSimulation = async () => {
+    setLoading(true);
+    setMetrics(null);
     const tickers = positions.map(p => p.symbol)
     const weights = positions.map(p => p.allocation / 100)
 
-    const res = await fetch("http://localhost:8000/simulate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        tickers,
-        weights,
-        start: params.start,
-        end: params.end,
-        interval: params.interval,
-        n_steps: parseInt(params.nSteps),
-        n_sims: parseInt(params.nSims),
-        alpha: parseFloat(params.alpha),
-        risk_free_rate: parseFloat(params.riskFreeRate),
-        include: ["metrics"],
-      }),
-    })
-
-    const data = await res.json()
-    console.log("Simulation results:", data)
+    try {
+      const res = await fetch("http://localhost:8000/simulate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tickers,
+          weights,
+          start: params.start,
+          end: params.end,
+          interval: params.interval,
+          n_steps: parseInt(params.nSteps),
+          n_sims: parseInt(params.nSims),
+          alpha: parseFloat(params.alpha),
+          risk_free_rate: parseFloat(params.riskFreeRate),
+          include: ["metrics"],
+        }),
+      })
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail ?? "Simulation failed");
+      setMetrics(data.metrics);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -286,10 +307,10 @@ export default function MonteCarloPage() {
         <div className="pt-6 border-t border-neutral-800">
           <button
             onClick={runSimulation}
-            disabled={!canRunSimulation}
+            disabled={!canRunSimulation || loading}
             className="px-6 py-3 bg-neutral-100 text-neutral-900 transition-all hover:scale-101 hover:bg-green-100 disabled:opacity-30 disabled:cursor-not-allowed rounded font-medium cursor-pointer active:scale-99"
           >
-            Run Monte Carlo Simulation
+            {loading ? "Running..." : "Run Monte Carlo Simulation"}
           </button>
           
           {!canRunSimulation && positions.length > 0 && (
@@ -312,6 +333,55 @@ export default function MonteCarloPage() {
             </p>
           )}
         </div>
+
+        {/* Results */}
+        {metrics && (
+          <div className="mt-8 pt-8 border-t border-neutral-800">
+            <h2 className="text-lg font-medium mb-4">Results</h2>
+            <div className="grid grid-cols-2 gap-x-12 gap-y-3 max-w-lg text-sm">
+              <div className="flex justify-between">
+                <span className="opacity-50">Mean Return</span>
+                <span className="font-mono">{fmtPct(metrics.mean_return)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="opacity-50">Median Return</span>
+                <span className="font-mono">{fmtPct(metrics.median_return)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="opacity-50">Median CAGR</span>
+                <span className="font-mono">{fmtPct(metrics.median_cagr)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="opacity-50">Volatility</span>
+                <span className="font-mono">{fmtPct(metrics.volatility)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="opacity-50">Sharpe Ratio</span>
+                <span className="font-mono">{fmtNum(metrics.sharpe)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="opacity-50">Prob. of Loss</span>
+                <span className="font-mono">{fmtPct(metrics.prob_loss, 1)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="opacity-50">VaR ({params.alpha})</span>
+                <span className="font-mono">{fmtPct(metrics.var)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="opacity-50">CVaR ({params.alpha})</span>
+                <span className="font-mono">{fmtPct(metrics.cvar)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="opacity-50">Mean Max Drawdown</span>
+                <span className="font-mono">{fmtPct(metrics.mean_mdd)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="opacity-50">Worst Max Drawdown</span>
+                <span className="font-mono">{fmtPct(metrics.worst_mdd)}</span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
