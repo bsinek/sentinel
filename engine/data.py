@@ -11,8 +11,7 @@ def fetch_prices(tickers: list[str], start: str, end: str, interval: str = '1d')
     :param interval: data frequency — "1d", "1wk", or "1mo" (default "1d")
     :returns: DataFrame with dates as index and tickers as columns, forward-filled and NaN rows dropped
     """
-    raw = yf.download(tickers, start=start, end=end, interval=interval, auto_adjust=True, progress=False)
-    prices = raw['Close']
+    prices = yf.download(tickers, start=start, end=end, interval=interval, auto_adjust=True, progress=False)['Close']
 
     # yfinance returns a Series (not DataFrame) when downloading a single ticker
     if isinstance(prices, pd.Series):
@@ -21,6 +20,12 @@ def fetch_prices(tickers: list[str], start: str, end: str, interval: str = '1d')
     prices = prices.ffill().dropna()
 
     if prices.empty:
-        raise ValueError(f'no price data returned for tickers {tickers} in range {start} to {end}')
+        raise ValueError(f'No valid data returned for {tickers} between {start} and {end}')
+    
+    # minimum window of 30 days
+    # 2 * assets ensures covariance matrix stability
+    min_required = max(30, len(prices.columns) * 2)
+    if len(prices) < min_required:
+        raise ValueError(f'Insufficient data: Need at least {min_required} days for {len(prices.columns)} tickers. Got {len(prices)}')
 
     return prices

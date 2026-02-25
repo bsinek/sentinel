@@ -20,9 +20,9 @@ def aggregate_portfolio(price_paths: np.ndarray, weights: np.ndarray | None = No
         weights = np.asarray(weights)
         
         if len(weights) != n_assets:
-            raise ValueError('weights length must match number of assets')
+            raise ValueError(f'Weights length {len(weights)} does not match {n_assets} assets')
         if not np.isclose(weights.sum(), 1.0):
-            raise ValueError('weights must sum to 1')
+            raise ValueError(f'Weights sum to {weights.sum()} but should sum to 1.0')
     
     # matrix mutliplication along assets axis
     portfolio_paths = price_paths @ weights
