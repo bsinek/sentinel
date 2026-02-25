@@ -126,6 +126,9 @@ def var(portfolio_paths: np.ndarray, alpha: float = 0.95) -> float:
     :param alpha: confidence level (default 0.95)
     :returns: scalar VaR as a decimal return (negative = loss)
     """
+    if not (0 < alpha < 1):
+        raise ValueError(f'VaR alpha must be between 0 and 1. Got {alpha}')
+
     portfolio_paths = np.asarray(portfolio_paths)
 
     terminal_returns = _calculate_terminal_returns(portfolio_paths)
@@ -144,6 +147,9 @@ def cvar(portfolio_paths: np.ndarray, alpha: float = 0.95) -> float:
     :param alpha: confidence level (default 0.95)
     :returns: scalar CVaR as a decimal return (negative = loss)
     """
+    if not (0 < alpha < 1):
+        raise ValueError(f'CVaR alpha must be between 0 and 1. Got {alpha}')
+
     portfolio_paths = np.asarray(portfolio_paths)
     
     terminal_returns = _calculate_terminal_returns(portfolio_paths)

@@ -33,30 +33,25 @@ def interval_to_dt(interval: str) -> float:
 def simulate(req: SimulationRequest):
     try:
         prices = fetch_prices(req.tickers, str(req.start), str(req.end), req.interval)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=502, detail='External market data provider error')
-    
-    weights = req.weights if req.weights is not None else None
-
-    try:
         S0, mu, cov = estimate_params(prices)
         asset_paths = simulate_gbm(S0, mu, cov, req.n_steps, req.n_sims)
-        portfolio_paths = aggregate_portfolio(asset_paths, weights)
+        portfolio_paths = aggregate_portfolio(asset_paths, req.weights)
+
+        response = SimulationResponse()
+
+        if 'asset_paths' in req.include:
+            response.asset_paths = asset_paths.tolist()
+        if 'portfolio_paths' in req.include:
+            response.portfolio_paths = portfolio_paths.tolist()
+        if 'metrics' in req.include:
+            metrics = summary(portfolio_paths, interval_to_dt(req.interval), req.alpha, req.risk_free_rate)
+            response.metrics = MetricsResult(**metrics)
+        
+        return response
+
     except ValueError as e:
+        print(e)
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail='Internal simulation engine error')
-
-    # build response
-    response = SimulationResponse()
-    if 'asset_paths' in req.include:
-        response.asset_paths = asset_paths.tolist()
-    if 'portfolio_paths' in req.include:
-        response.portfolio_paths = portfolio_paths.tolist()
-    if 'metrics' in req.include:
-        metrics = summary(portfolio_paths, interval_to_dt(req.interval), req.alpha, req.risk_free_rate)
-        response.metrics = MetricsResult(**metrics)
-
-    return response
+        print(e)
+        raise HTTPException(status_code=500, detail='Internal engine error')

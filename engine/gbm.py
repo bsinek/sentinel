@@ -19,12 +19,11 @@ def simulate_gbm(S0: np.ndarray, mu: np.ndarray, cov: np.ndarray, n_steps: int, 
 
     n_assets = len(S0)
 
-    # correlated diffusion
     try:
         chol_factor = np.linalg.cholesky(cov)
     except np.linalg.LinAlgError:
-        raise ValueError('covariance matrix is not positive definite')
-
+        raise ValueError(f'The assets selected are too highly correlated. Try removing duplicate assets or increasing the date range.')
+    
     Z = np.random.normal(size=(n_sims, n_steps, n_assets))
     diffusion = Z @ chol_factor.T
 
