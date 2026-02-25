@@ -11,7 +11,7 @@ def fetch_prices(tickers: list[str], start: str, end: str, interval: str = '1d')
     :param interval: data frequency — "1d", "1wk", or "1mo" (default "1d")
     :returns: DataFrame with dates as index and tickers as columns, forward-filled and NaN rows dropped
     """
-    raw = yf.download(tickers, start=start, end=end, interval=interval, auto_adjust=True)
+    raw = yf.download(tickers, start=start, end=end, interval=interval, auto_adjust=True, progress=False)
     prices = raw['Close']
 
     # yfinance returns a Series (not DataFrame) when downloading a single ticker
