@@ -12,12 +12,6 @@ def simulate_gbm(S0: np.ndarray, mu: np.ndarray, cov: np.ndarray, dt: float, n_s
     :param n_sims: number of simulations
     :returns: (n_sims, n_steps+1, n_assets) array of simulated price paths
     """
-
-    # convert to numpy arrays
-    S0 = np.asarray(S0)
-    mu = np.asarray(mu)
-    cov = np.asarray(cov)
-
     n_assets = len(S0)
 
     try:

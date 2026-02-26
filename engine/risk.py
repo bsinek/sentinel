@@ -33,8 +33,6 @@ def _calculate_terminal_returns(portfolio_paths: np.ndarray) -> np.ndarray:
     :param portfolio_paths: (n_simulations, n_steps) array of portfolio values
     :returns: (n_simulations,) array of terminal returns as decimals
     """
-    portfolio_paths = np.asarray(portfolio_paths)
-
     initial = portfolio_paths[:, 0]
     final = portfolio_paths[:, -1]
     return (final - initial) / initial
@@ -47,8 +45,6 @@ def mean_return(portfolio_paths: np.ndarray) -> float:
     :param portfolio_paths: (n_simulations, n_steps) array of portfolio values
     :returns: scalar mean return as a decimal
     """
-    portfolio_paths = np.asarray(portfolio_paths)
-
     return _calculate_terminal_returns(portfolio_paths).mean()
 
 
@@ -59,8 +55,6 @@ def median_return(portfolio_paths: np.ndarray) -> float:
     :param portfolio_paths: (n_simulations, n_steps) array of portfolio values
     :returns: scalar median return as a decimal
     """
-    portfolio_paths = np.asarray(portfolio_paths)
-
     return np.median(_calculate_terminal_returns(portfolio_paths))
 
 
@@ -72,8 +66,6 @@ def cagrs(portfolio_paths: np.ndarray, dt: float) -> np.ndarray:
     :param dt: time delta between steps in years (e.g. 1/252 for daily)
     :returns: (n_simulations,) array of annualized growth rates as decimals
     """
-    portfolio_paths = np.asarray(portfolio_paths)
-
     years = (portfolio_paths.shape[1] - 1) * dt
     initial = portfolio_paths[:, 0]
     final = portfolio_paths[:, -1]
@@ -91,8 +83,6 @@ def volatility(portfolio_paths: np.ndarray, dt: float) -> float:
     :param dt: time delta between steps in years (e.g. 1/252 for daily)
     :returns: scalar annualized volatility as a decimal
     """
-    portfolio_paths = np.asarray(portfolio_paths)
-
     returns = portfolio_paths[:, 1:] / portfolio_paths[:, :-1] - 1
     vol_per_step = returns.std(ddof=1)
     return vol_per_step / np.sqrt(dt)
@@ -107,8 +97,6 @@ def sharpe(portfolio_paths: np.ndarray, dt: float, risk_free_rate: float = 0.0) 
     :param risk_free_rate: annualized risk-free rate as a decimal (default 0.0)
     :returns: scalar Sharpe ratio
     """
-    portfolio_paths = np.asarray(portfolio_paths)
-
     returns = portfolio_paths[:, 1:] / portfolio_paths[:, :-1] - 1
     ann_vol = returns.std(ddof=1) / np.sqrt(dt)
     ann_return = returns.mean() / dt
@@ -129,8 +117,6 @@ def var(portfolio_paths: np.ndarray, alpha: float = 0.95) -> float:
     if not (0 < alpha < 1):
         raise ValueError(f'VaR alpha must be between 0 and 1. Got {alpha}')
 
-    portfolio_paths = np.asarray(portfolio_paths)
-
     terminal_returns = _calculate_terminal_returns(portfolio_paths)
     var = np.percentile(terminal_returns, (1 - alpha) * 100)
     return var
@@ -150,8 +136,6 @@ def cvar(portfolio_paths: np.ndarray, alpha: float = 0.95) -> float:
     if not (0 < alpha < 1):
         raise ValueError(f'CVaR alpha must be between 0 and 1. Got {alpha}')
 
-    portfolio_paths = np.asarray(portfolio_paths)
-    
     terminal_returns = _calculate_terminal_returns(portfolio_paths)
     var_threshold = np.percentile(terminal_returns, (1 - alpha) * 100)
     cvar = terminal_returns[terminal_returns <= var_threshold].mean()
@@ -165,8 +149,6 @@ def max_drawdowns(portfolio_paths: np.ndarray) -> np.ndarray:
     :param portfolio_paths: (n_simulations, n_steps) array of portfolio values
     :returns: (n_simulations,) array of maximum drawdowns as decimals (negative = drawdown)
     """
-    portfolio_paths = np.asarray(portfolio_paths)
-
     running_peak = np.maximum.accumulate(portfolio_paths, axis=1)
     drawdowns = (portfolio_paths - running_peak) / running_peak
     return drawdowns.min(axis=1)
@@ -179,7 +161,5 @@ def prob_loss(portfolio_paths: np.ndarray) -> float:
     :param portfolio_paths: (n_simulations, n_steps) array of portfolio values
     :returns: scalar probability in [0, 1]
     """
-    portfolio_paths = np.asarray(portfolio_paths)
-
     terminal_returns = _calculate_terminal_returns(portfolio_paths)
     return (terminal_returns < 0).mean()
