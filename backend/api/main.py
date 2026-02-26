@@ -2,12 +2,12 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from .schemas import SimulationRequest, SimulationResponse, MetricsResult, ProjectionResult
-from engine.data import fetch_prices
-from engine.estimation import estimate_params
-from engine.gbm import simulate_gbm
-from engine.portfolio import aggregate_portfolio
-from engine.risk import summary
-from engine.projection import prepare_projection
+from ..engine.data import fetch_prices
+from ..engine.estimation import estimate_params
+from ..engine.gbm import simulate_gbm
+from ..engine.portfolio import aggregate_portfolio
+from ..engine.risk import summary
+from ..engine.projection import prepare_projection
 
 app = FastAPI()
 
