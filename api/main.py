@@ -32,9 +32,9 @@ def interval_to_dt(interval: str) -> float:
 @app.post('/simulate', response_model=SimulationResponse)
 def simulate(req: SimulationRequest):
     try:
-        prices = fetch_prices(req.tickers, str(req.start), str(req.end), req.interval)
+        prices = fetch_prices(req.tickers, str(req.start), str(req.end))
         S0, mu, cov = estimate_params(prices)
-        asset_paths = simulate_gbm(S0, mu, cov, req.n_steps, req.n_sims)
+        asset_paths = simulate_gbm(S0, mu, cov, interval_to_dt(req.interval), req.n_steps, req.n_sims)
         portfolio_paths = aggregate_portfolio(asset_paths, req.weights)
 
         response = SimulationResponse()
