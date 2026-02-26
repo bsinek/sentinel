@@ -8,17 +8,14 @@ def aggregate_portfolio(price_paths: np.ndarray, weights: np.ndarray | None = No
     :param weights: (n_assets,) array of portfolio allocation weights
     :returns: (n_sims, n_steps+1) array of portfolio value paths
     """
-    # convert to numpy array
-    price_paths = np.asarray(price_paths)
-
     n_assets = price_paths.shape[2]
 
     if weights is None:
         weights = np.ones(n_assets) / n_assets
     else:
-        # convert to numpy array
+        # convery to numpy array
         weights = np.asarray(weights)
-        
+
         if len(weights) != n_assets:
             raise ValueError(f'Weights length {len(weights)} does not match {n_assets} assets')
         if not np.isclose(weights.sum(), 1.0):
