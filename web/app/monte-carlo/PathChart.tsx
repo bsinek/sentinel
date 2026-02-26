@@ -3,80 +3,85 @@
 import { useMemo } from "react";
 
 interface PathChartProps {
-  paths: number[][];
-  maxDisplayPaths?: number;
+  projection: {
+    confidence_bands: {
+      upper_band: number[];
+      median_band: number[];
+      lower_band: number[];
+    };
+    sample_paths: number[][];
+  };
+  nSteps: number;
+  alpha: number;
 }
 
 const PAD = { top: 20, right: 20, bottom: 32, left: 52 };
 const W = 800;
 const H = 300;
 
-function normalizePaths(paths: number[][]): number[][] {
-  return paths.map((path) => {
-    const s0 = path[0];
-    return path.map((v) => v / s0);
-  });
-}
-
-function subsample(paths: number[][], max: number): number[][] {
-  if (paths.length <= max) return paths;
-  const step = paths.length / max;
-  return Array.from({ length: max }, (_, i) => paths[Math.floor(i * step)]);
-}
-
-function percentilePath(paths: number[][], p: number): number[] {
-  const nSteps = paths[0].length;
-  return Array.from({ length: nSteps }, (_, t) => {
-    const vals = paths.map((path) => path[t]).sort((a, b) => a - b);
-    const idx = Math.min(Math.floor(p * vals.length), vals.length - 1);
-    return vals[idx];
-  });
-}
-
-export default function PathChart({ paths, maxDisplayPaths = 150 }: PathChartProps) {
-  const { displayPaths, medianPath, p10Path, p90Path, yMin, yMax } = useMemo(() => {
-    const normed = normalizePaths(paths);
-    const display = subsample(normed, maxDisplayPaths);
-
-    const medianPath = percentilePath(normed, 0.5);
-    const p10Path = percentilePath(normed, 0.1);
-    const p90Path = percentilePath(normed, 0.9);
-
+export default function PathChart({ projection, nSteps, alpha }: PathChartProps) {
+  const lowerPercentile = Math.round((1 - alpha) * 100);
+  const upperPercentile = Math.round(alpha * 100);
+  const { yMin, yMax, yTicks } = useMemo(() => {
+    const { sample_paths } = projection;
+    
     let lo = Infinity, hi = -Infinity;
-    for (const path of normed) {
+    for (const path of sample_paths) {
       for (const v of path) {
         if (v < lo) lo = v;
         if (v > hi) hi = v;
       }
     }
-    const range = hi - lo || 1;
-    const yMin = lo - range * 0.02;
-    const yMax = hi + range * 0.02;
+    
+    // Ensure 1.0 is in range
+    lo = Math.min(lo, 1.0);
+    hi = Math.max(hi, 1.0);
+    
+    // Calculate distances from 1.0 to data bounds
+    const distBelow = 1.0 - lo;
+    const distAbove = hi - 1.0;
+    const maxDist = Math.max(distBelow, distAbove);
+    
+    // Create symmetric range around 1.0 with padding
+    const padding = maxDist * 0.1;
+    const extendedDist = maxDist + padding;
+    
+    // Calculate uniform tick spacing (5 ticks total, 1.0 in the middle)
+    const tickStep = (extendedDist * 2) / 4;
+    const yTicks = [
+      1.0 - 2 * tickStep,
+      1.0 - tickStep,
+      1.0,
+      1.0 + tickStep,
+      1.0 + 2 * tickStep,
+    ];
+    
+    const yMin = yTicks[0];
+    const yMax = yTicks[4];
 
-    return { displayPaths: display, medianPath, p10Path, p90Path, yMin, yMax };
-  }, [paths, maxDisplayPaths]);
+    return { yMin, yMax, yTicks };
+  }, [projection]);
 
   const iW = W - PAD.left - PAD.right;
   const iH = H - PAD.top - PAD.bottom;
-  const nSteps = paths[0].length;
 
   const xScale = (t: number) => (t / (nSteps - 1)) * iW;
   const yScale = (v: number) => iH - ((v - yMin) / (yMax - yMin)) * iH;
   const pts = (path: number[]) => path.map((v, t) => `${xScale(t)},${yScale(v)}`).join(" ");
 
-  const yTicks = Array.from({ length: 5 }, (_, i) => yMin + (i / 4) * (yMax - yMin));
+  const { upper_band, median_band, lower_band } = projection.confidence_bands;
 
   const bandD = [
     "M",
-    p90Path.map((v, t) => `${xScale(t)},${yScale(v)}`).join(" L "),
+    upper_band.map((v, t) => `${xScale(t)},${yScale(v)}`).join(" L "),
     "L",
-    [...p10Path].reverse().map((v, t) => `${xScale(nSteps - 1 - t)},${yScale(v)}`).join(" L "),
+    [...lower_band].reverse().map((v, t) => `${xScale(nSteps - 1 - t)},${yScale(v)}`).join(" L "),
     "Z",
   ].join(" ");
 
   return (
     <div className="w-full">
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 320 }}>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
         <g transform={`translate(${PAD.left},${PAD.top})`}>
           {/* Y gridlines + labels */}
           {yTicks.map((tick, i) => (
@@ -95,14 +100,8 @@ export default function PathChart({ paths, maxDisplayPaths = 150 }: PathChartPro
             </g>
           ))}
 
-          {/* X axis baseline */}
-          <line
-            x1={0} y1={iH} x2={iW} y2={iH}
-            stroke="currentColor" strokeOpacity={0.15} strokeWidth={1}
-          />
-
           {/* Simulation paths */}
-          {displayPaths.map((path, i) => (
+          {projection.sample_paths.map((path, i) => (
             <polyline
               key={i}
               points={pts(path)}
@@ -118,19 +117,19 @@ export default function PathChart({ paths, maxDisplayPaths = 150 }: PathChartPro
 
           {/* P10 / P90 bounds */}
           <polyline
-            points={pts(p10Path)}
+            points={pts(lower_band)}
             fill="none" stroke="currentColor"
             strokeOpacity={0.3} strokeWidth={1} strokeDasharray="3 3"
           />
           <polyline
-            points={pts(p90Path)}
+            points={pts(upper_band)}
             fill="none" stroke="currentColor"
             strokeOpacity={0.3} strokeWidth={1} strokeDasharray="3 3"
           />
 
           {/* Median */}
           <polyline
-            points={pts(medianPath)}
+            points={pts(median_band)}
             fill="none" stroke="currentColor"
             strokeOpacity={0.85} strokeWidth={1.5}
           />
@@ -148,8 +147,8 @@ export default function PathChart({ paths, maxDisplayPaths = 150 }: PathChartPro
 
       <div className="flex gap-6 mt-2 text-xs opacity-40">
         <span>— median</span>
-        <span className="opacity-70">--- P10 / P90</span>
-        <span>{paths.length.toLocaleString()} paths · {nSteps - 1} steps</span>
+        <span className="opacity-70">--- P{lowerPercentile} / P{upperPercentile}</span>
+        <span>{projection.sample_paths.length} paths · {nSteps} steps</span>
       </div>
     </div>
   );

@@ -12,7 +12,9 @@ class SimulationRequest(BaseModel):
     alpha: float = 0.95
     risk_free_rate: float = 0.0
     weights: list[float] | None = None
-    include: list[Literal['asset_paths', 'portfolio_paths', 'metrics']] = ['metrics']
+    n_samples: int = 50
+    include: list[Literal['metrics', 'projection']] = ['metrics', 'projection']
+
 
 class MetricsResult(BaseModel):
     mean_return: float
@@ -26,7 +28,12 @@ class MetricsResult(BaseModel):
     worst_mdd: float
     prob_loss: float
 
+
+class ProjectionResult(BaseModel):
+    confidence_bands: dict[str, list[float]]
+    sample_paths: list[list[float]]
+
+
 class SimulationResponse(BaseModel):
-    asset_paths: list | None = None
-    portfolio_paths: list | None = None
     metrics: MetricsResult | None = None
+    projection: ProjectionResult | None = None
