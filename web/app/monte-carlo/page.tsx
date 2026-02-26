@@ -21,6 +21,15 @@ interface MetricsResult {
   prob_loss: number;
 }
 
+interface ProjectionResult {
+  confidence_bands: {
+    upper_band: number[];
+    median_band: number[];
+    lower_band: number[];
+  };
+  sample_paths: number[][];
+}
+
 interface SimulationParams {
   start: string;
   end: string;
@@ -29,6 +38,7 @@ interface SimulationParams {
   nSims: string;
   alpha: string;
   riskFreeRate: string;
+  nSamples: string;
 }
 
 const AVAILABLE_SYMBOLS = [
@@ -42,7 +52,7 @@ export default function MonteCarloPage() {
   const [selectedSymbol, setSelectedSymbol] = useState<string>("");
   const [allocation, setAllocation] = useState<string>("");
   const [metrics, setMetrics] = useState<MetricsResult | null>(null);
-  const [portfolioPaths, setPortfolioPaths] = useState<number[][] | null>(null);
+  const [projection, setProjection] = useState<ProjectionResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [params, setParams] = useState<SimulationParams>({
     start: "2022-01-01",
@@ -52,6 +62,7 @@ export default function MonteCarloPage() {
     nSims: "1000",
     alpha: "0.95",
     riskFreeRate: "0.0",
+    nSamples: "50",
   });
 
   const totalAllocation = positions.reduce((sum, pos) => sum + pos.allocation, 0);
@@ -81,6 +92,8 @@ export default function MonteCarloPage() {
 
   const fmtPct = (v: number | null, d = 2) =>
     v == null || !isFinite(v) ? "—" : `${(v * 100).toFixed(d)}%`;
+  const fmtPctSigned = (v: number | null, d = 2) =>
+    v == null || !isFinite(v) ? "—" : `${v >= 0 ? '+' : ''}${(v * 100).toFixed(d)}%`;
   const fmtNum = (v: number | null, d = 3) =>
     v == null || !isFinite(v) ? "—" : v.toFixed(d);
 
@@ -95,7 +108,7 @@ export default function MonteCarloPage() {
   const runSimulation = async () => {
     setLoading(true);
     setMetrics(null);
-    setPortfolioPaths(null);
+    setProjection(null);
     const tickers = positions.map(p => p.symbol)
     const weights = positions.map(p => p.allocation / 100)
 
@@ -113,13 +126,14 @@ export default function MonteCarloPage() {
           n_sims: parseInt(params.nSims),
           alpha: parseFloat(params.alpha),
           risk_free_rate: parseFloat(params.riskFreeRate),
-          include: ["portfolio_paths", "metrics"],
+          n_samples: parseInt(params.nSamples),
+          include: ["metrics", "projection"],
         }),
       })
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail ?? "Simulation failed");
       setMetrics(data.metrics);
-      if (data.portfolio_paths) setPortfolioPaths(data.portfolio_paths);
+      if (data.projection) setProjection(data.projection);
     } finally {
       setLoading(false);
     }
@@ -304,6 +318,21 @@ export default function MonteCarloPage() {
                 className="px-3 py-2 border border-neutral-700 bg-neutral-900 rounded focus:outline-none focus:ring-1 focus:ring-neutral-500 text-sm"
               />
             </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs opacity-50 uppercase tracking-wide">Paths to Display</label>
+              <select
+                value={params.nSamples}
+                onChange={(e) => setParams({ ...params, nSamples: e.target.value })}
+                className="px-3 py-2 border border-neutral-700 bg-neutral-900 rounded focus:outline-none focus:ring-1 focus:ring-neutral-500 text-sm"
+              >
+                <option value="25">25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+                <option value="150">150</option>
+                <option value="200">200</option>
+                <option value="500">500</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -339,15 +368,15 @@ export default function MonteCarloPage() {
         </div>
 
         {/* Results */}
-        {(metrics || portfolioPaths) && (
+        {(metrics || projection) && (
           <div className="mt-8 pt-8 border-t border-neutral-800">
             <h2 className="text-lg font-medium mb-6">Results</h2>
 
             {/* Portfolio Paths Chart */}
-            {portfolioPaths && (
+            {projection && (
               <div className="mb-8">
                 <p className="text-xs opacity-40 uppercase tracking-wide mb-3">Portfolio Value Paths</p>
-                <PathChart paths={portfolioPaths} />
+                <PathChart projection={projection} nSteps={parseInt(params.nSteps)} alpha={parseFloat(params.alpha)} />
               </div>
             )}
 
@@ -355,15 +384,15 @@ export default function MonteCarloPage() {
             <div className="grid grid-cols-2 gap-x-12 gap-y-3 max-w-lg text-sm">
               <div className="flex justify-between">
                 <span className="opacity-50">Mean Return</span>
-                <span className="font-mono">{fmtPct(metrics.mean_return)}</span>
+                <span className="font-mono">{fmtPctSigned(metrics.mean_return)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="opacity-50">Median Return</span>
-                <span className="font-mono">{fmtPct(metrics.median_return)}</span>
+                <span className="font-mono">{fmtPctSigned(metrics.median_return)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="opacity-50">Median CAGR</span>
-                <span className="font-mono">{fmtPct(metrics.median_cagr)}</span>
+                <span className="font-mono">{fmtPctSigned(metrics.median_cagr)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="opacity-50">Volatility</span>
