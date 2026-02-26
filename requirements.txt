@@ -2,10 +2,9 @@ annotated-doc==0.0.4
 annotated-types==0.7.0
 anyio==4.12.1
 appnope==0.1.4
-asgiref==3.11.1
 asttokens==3.0.1
 beautifulsoup4==4.14.3
-certifi==2026.1.4
+certifi==2026.2.25
 cffi==2.0.0
 charset-normalizer==3.4.4
 click==8.3.1
@@ -15,10 +14,8 @@ curl_cffi==0.13.0
 cycler==0.12.1
 debugpy==1.8.20
 decorator==5.2.1
-Django==6.0.2
-djangorestframework==3.16.1
 executing==2.2.1
-fastapi==0.129.2
+fastapi==0.133.1
 fonttools==4.61.1
 frozendict==2.4.7
 h11==0.16.0
@@ -36,9 +33,9 @@ multitasking==0.0.12
 nest-asyncio==1.6.0
 numpy==2.4.2
 packaging==26.0
-pandas==3.0.0
+pandas==3.0.1
 parso==0.8.6
-peewee==3.19.0
+peewee==4.0.0
 pexpect==4.9.0
 pillow==12.1.1
 platformdirs==4.9.2
@@ -58,7 +55,6 @@ pyzmq==27.1.0
 requests==2.32.5
 six==1.17.0
 soupsieve==2.8.3
-sqlparse==0.5.5
 stack-data==0.6.3
 starlette==0.52.1
 tornado==6.5.4
