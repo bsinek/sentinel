@@ -1,3 +1,6 @@
+from datetime import date
+
+from . import cache
 from ..api.schemas import SimulationRequest, SimulationResponse, MetricsResult, ProjectionResult
 from ..engine.data import fetch_prices
 from ..engine.estimation import estimate_params
@@ -5,6 +8,12 @@ from ..engine.gbm import simulate_gbm
 from ..engine.portfolio import aggregate_portfolio
 from ..engine.risk import summary
 from ..engine.projection import prepare_projection
+
+
+def get_price_key(tickers: list[str], start: date, end: date) -> str:
+    sorted_tickers = ','.join(sorted(tickers))
+    return f'prices:{sorted_tickers}:{start}:{end}'
+
 
 def interval_to_dt(interval: str) -> float:
     mapping = {
@@ -14,8 +23,14 @@ def interval_to_dt(interval: str) -> float:
     }
     return mapping[interval]
 
+
 def run_simulation(req: SimulationRequest):
-    prices = fetch_prices(req.tickers, str(req.start), str(req.end))
+    price_key = get_price_key(req.tickers, req.start, req.end)
+    prices = cache.get(price_key)
+    if prices is None:
+        prices = fetch_prices(req.tickers, str(req.start), str(req.end))
+        cache.set(price_key, prices)
+
     S0, mu, cov = estimate_params(prices)
     dt = interval_to_dt(req.interval)
     asset_paths = simulate_gbm(S0, mu, cov, dt, req.n_steps, req.n_sims)
