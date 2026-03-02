@@ -1,6 +1,9 @@
-import redis
+import logging
 import pickle
+import redis
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_TTL = 86400     # 1 day
 
@@ -11,12 +14,12 @@ def get(key: str) -> Any | None:
     try:
         raw = _redis.get(key)
         if raw is None:
-            print(f'CACHE MISS: {key}')
+            logger.debug(f'CACHE MISS: {key}')
             return None
-        print(f'CACHE HIT: {key}')
+        logger.debug(f'CACHE HIT: {key}')
         return pickle.loads(raw)
     except Exception as e:
-        print(f'CACHE ERROR: {e}')
+        logger.warning(f'CACHE ERROR: {e}')
         return None
 
 
@@ -27,9 +30,8 @@ def set(key: str, value: Any, ttl: int = DEFAULT_TTL):
 
         size_kb = len(serialized_value)
         if size_kb > 1024:
-            print(f'CACHE SET: {key} ({size_kb/1024:.2f} MB)')
+            logger.debug(f'CACHE SET: {key} ({size_kb/1024:.2f} MB)')
         else:
-            print(f'CACHE SET: {key} ({size_kb:.2f} KB)')
+            logger.debug(f'CACHE SET: {key} ({size_kb:.2f} KB)')
     except Exception as e:
-        print(f'CACHE ERROR: {e}')
-        return
+        logger.warning(f'CACHE ERROR: {e}')

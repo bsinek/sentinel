@@ -1,8 +1,13 @@
+import logging
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from .schemas import SimulationRequest, SimulationResponse
 from ..runtime.simulate import run_simulation
+
+logging.basicConfig(level=logging.WARNING)                                                                                                                                             
+logging.getLogger('backend').setLevel(logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
@@ -22,8 +27,8 @@ def simulate(req: SimulationRequest) -> SimulationResponse:
     try:
         return run_simulation(req)
     except ValueError as e:
-        print(e)
+        logger.warning(e)
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        print(e)
+        logger.error(e)
         raise HTTPException(status_code=500, detail='Internal engine error')
