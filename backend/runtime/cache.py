@@ -4,7 +4,7 @@ from typing import Any
 
 DEFAULT_TTL = 86400     # 1 day
 
-_redis = redis.Redis(host='localhost', port=6379, socket_connect_timeout=1, socket_timeout=1)
+_redis = redis.Redis(host='localhost', port=6379, socket_connect_timeout=1, socket_timeout=0.1, retry_on_timeout=True)
 
 
 def get(key: str) -> Any | None:
