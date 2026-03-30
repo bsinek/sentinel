@@ -1,66 +1,84 @@
-# Sentinel System Context
+# Sentinel — Claude Code Guidelines
 
-Sentinel is a modular quant research environment for portfolio construction, simulation, and strategy experimentation.
-It is a research system, not a trading product or dashboard.
-Quantitative methods are implemented as independent modules and evaluated through a consistent experimentation pipeline.
+## What is Sentinel
 
-## Core Workflow
-portfolio construction -> simulation -> evaluation
+Sentinel is a DAG-based quantitative research platform for building and testing flexible research workflows across derivatives, ML, stat arb, order flow, simulation, and realistic backtesting. See [docs/PROJECT.md](docs/PROJECT.md) for full vision and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for technical design.
 
-## Architecture Direction
-- Django + Django REST Framework (DRF) for orchestration and experiment APIs  
-- Postgres for experiment data, configurations, and results  
-- Celery + Redis for asynchronous simulations and compute workloads  
-- Quant engine implemented as independent, modular Python components that integrate without modifying orchestration logic  
-- Frontend flexible and replaceable; visualization is not core to system operation  
+## Current State
+
+- **Working MVP**: Monte Carlo GBM simulation end-to-end (frontend → FastAPI → engine → results)
+- **Backend**: FastAPI + Redis cache + modular Python engine (`backend/engine/`, `backend/runtime/`)
+- **Frontend**: Next.js 16 + React 19 + Tailwind v4, one working page (`/monte-carlo`)
+- **Not yet built**: DAG execution engine, persistence layer, Celery workers, multiple quant domains
+- See [docs/ROADMAP.md](docs/ROADMAP.md) for what's done and what's next
 
 ## Engineering Principles
-- modular system design  
-- separation of compute and orchestration  
-- research-first infrastructure  
-- reproducibility over speed  
-- incremental system complexity (avoid premature abstraction)  
-- avoid premature implementation of advanced quant methods; core quantitative modeling should be user-driven, with Claude primarily assisting infrastructure and scaffolding
 
-## Frontend Engineering Constraints
-Color system:
-- Use a cohesive theme defined in global.css via CSS variables
-- Avoid ad-hoc colors and inconsistent palettes
+- Modular system design — computation as independent, composable units
+- Separation of compute and orchestration
+- Research-first infrastructure — reproducibility over speed
+- Incremental complexity — avoid premature abstraction
+- Core quantitative modeling is user-driven; Claude assists infrastructure and scaffolding
+- Do not implement advanced quant methods without explicit direction
 
-Structure:
-- Single-file pages are acceptable when appropriate
-- Avoid large, monolithic components that contain all UI logic and markup
+## Git Conventions
+
+Use [Conventional Commits](https://www.conventionalcommits.org/) for all commit messages.
+
+Format: `<type>(<scope>): <description>`
+
+Common types: `feat`, `fix`, `refactor`, `docs`, `chore`, `test`, `style`, `perf`
+
+Examples:
+- `feat(engine): add GBM simulation module`
+- `fix(cache): handle Redis connection timeout`
+- `docs(claude): add subagent usage rule`
+- `refactor(runtime): extract orchestration logic to runtime layer`
+
+## Backend Conventions
+
+- Engine modules in `backend/engine/` are pure computation — no I/O, no side effects
+- Orchestration logic lives in `backend/runtime/`
+- API layer (`backend/api/`) handles validation and response formatting only
+- Redis is used for caching price data (TTL 1 day, pickle serialization)
+- Type hints on all public functions
+
+## Frontend Constraints
+
+**Color system:**
+- Cohesive theme via CSS variables in `globals.css`
+- No ad-hoc colors or inconsistent palettes
+
+**Structure:**
+- Single-file pages acceptable when appropriate
 - Extract reusable or complex parts into components
-- Organize by clarity, not by premature abstraction
+- Organize by clarity, not premature abstraction
 - Keep component structure shallow and readable
 
-Complexity:
-- Keep the UI minimal and focused
-- Avoid unnecessary dependencies, frameworks, and abstractions
+**Complexity:**
+- Minimal and focused UI
+- No unnecessary dependencies or frameworks
 - Prefer simple React + Next patterns
 - Build complexity incrementally
 
-Design quality:
-- Avoid generic, template-style, or AI-generated interfaces
-- Do not default to standard SaaS dashboard aesthetics
-- Aim for a cohesive, intentional interface suited to a research environment
+**Design quality:**
+- No generic, template-style, or AI-generated-looking interfaces
+- No standard SaaS dashboard aesthetics
+- Cohesive, intentional interface suited to a research environment
 
+## Claude Behavior Rules
 
+**Do not act before instructions:**
+Do not jump into implementation or change files unless clearly instructed. When intent is ambiguous, default to research and recommendations. Only proceed with edits when explicitly requested.
 
-# Global Claude Rules
+**Investigate before answering:**
+Never speculate about code you haven't read. Read relevant files before answering questions about the codebase.
 
-<tool_use_summary>
-After completing a task that involves tool use, provide a quick summary of the work completed
-</tool_use_summary>
+**Parallel tool calls:**
+Make independent tool calls in parallel. Only sequence calls that have data dependencies.
 
-<do_not_act_before_instructions>
-Do not jump into implementatation or changes files unless clearly instructed to make changes. When the user's intent is ambiguous, default to providing information, doing research, and providing recommendations rather than taking action. Only proceed with edits, modifications, or implementations when the user explicitly requests them.
-</do_not_act_before_instructions>
+**Subagent usage for parallelizable work:**
+For large tasks that can be parallelized — such as auditing multiple modules, reading multiple files for research, or running independent analyses — spawn parallel subagents rather than working sequentially. Each subagent should have a clearly scoped task (e.g., "audit backend/engine/risk.py for correctness" or "research how Redis caching is used across the runtime layer") and return structured output back to the orchestrator. Prefer subagents when the work involves 3+ independent units that don't depend on each other's results.
 
-<use_parallel_tool_calls>
-If you intend to call multiple tools and there are no dependencies between the tool calls, make all of the independent tool calls in parallel. Prioritize calling tools simultaneously whenever the actions can be done in parallel rather than sequentially. For example, when reading 3 files, run 3 tool calls in parallel to read all 3 files into context at the same time. Maximize use of parallel tool calls where possible to increase speed and efficiency. However, if some tool calls depend on previous calls to inform dependent values like the parameters, do NOT call these tools in parallel and instead call them sequentially. Never use placeholders or guess missing parameters in tool calls.
-</use_parallel_tool_calls>
-
-<investigate_before_answering>
-Never speculate about code you have not opened. If the user references a specific file, you MUST read the file before answering. Make sure to investigate and read relevant files BEFORE answering questions about the codebase. Never make any claims about code before investigating unless you are certain of the correct answer - give grounded and hallucination-free answers.
-</investigate_before_answering>
+**After completing tool-use tasks:**
+Provide a brief summary of work completed.
