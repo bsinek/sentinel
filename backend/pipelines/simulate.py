@@ -2,7 +2,7 @@ import time
 import logging
 from datetime import date
 
-from . import cache
+from ..services import cache
 from ..api.schemas import SimulationRequest, SimulationResponse, MetricsResult, ProjectionResult
 from ..engine.data import fetch_prices
 from ..engine.estimation import estimate_params

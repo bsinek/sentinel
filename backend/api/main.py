@@ -3,7 +3,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from .schemas import SimulationRequest, SimulationResponse
-from ..runtime.simulate import run_simulation
+from ..pipelines.simulate import run_simulation
 
 logging.basicConfig(level=logging.WARNING)                                                                                                                                             
 logging.getLogger('backend').setLevel(logging.DEBUG)
