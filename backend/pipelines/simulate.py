@@ -3,7 +3,7 @@ import logging
 from datetime import date
 
 from ..services import cache
-from ..api.schemas import SimulationRequest, SimulationResponse, MetricsResult, ProjectionResult
+from ..api.schemas import SimulationRequest, SimulationResult, MetricsResult, ProjectionResult
 from ..engine.data import fetch_prices
 from ..engine.estimation import estimate_params
 from ..engine.gbm import simulate_gbm
@@ -50,7 +50,7 @@ def run_simulation(req: SimulationRequest):
     portfolio_paths = aggregate_portfolio(asset_paths, req.weights)
     logger.debug(f'AGGREGATE: {time.perf_counter() - t_port:.3f}s')
 
-    response = SimulationResponse()
+    response = SimulationResult()
 
     if 'metrics' in req.include:
         t_metrics = time.perf_counter()

@@ -34,6 +34,17 @@ class ProjectionResult(BaseModel):
     sample_paths: list[list[float]]
 
 
-class SimulationResponse(BaseModel):
+class SimulationResult(BaseModel):
     metrics: MetricsResult | None = None
     projection: ProjectionResult | None = None
+
+
+class JobSubmitResponse(BaseModel):
+    job_id: str
+
+
+class JobStatusResponse(BaseModel):
+    job_id: str
+    status: Literal['pending', 'running', 'completed', 'failed']
+    result: SimulationResult | None = None
+    error: str | None = None

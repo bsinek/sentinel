@@ -1,11 +1,12 @@
 import logging
-from fastapi import FastAPI, HTTPException
+from celery.result import AsyncResult
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .schemas import SimulationRequest, SimulationResponse
-from ..pipelines.simulate import run_simulation
+from .schemas import SimulationRequest, SimulationResult, JobSubmitResponse, JobStatusResponse
+from ..tasks.simulate import run_simulation_task
 
-logging.basicConfig(level=logging.WARNING)                                                                                                                                             
+logging.basicConfig(level=logging.WARNING)
 logging.getLogger('backend').setLevel(logging.DEBUG)
 logger = logging.getLogger(__name__)
 
@@ -18,17 +19,41 @@ app.add_middleware(
     allow_headers=['*'],
 )
 
+_STATE_MAP = {
+    'PENDING': 'pending',
+    'STARTED': 'running',
+    'SUCCESS': 'completed',
+    'FAILURE': 'failed',
+}
+
+
 @app.get('/health')
 def health():
-    return {'status' : 'ok'}
+    return {'status': 'ok'}
 
-@app.post('/simulate', response_model=SimulationResponse)
-def simulate(req: SimulationRequest) -> SimulationResponse:
-    try:
-        return run_simulation(req)
-    except ValueError as e:
-        logger.warning(e)
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(e)
-        raise HTTPException(status_code=500, detail='Internal engine error')
+
+@app.post('/jobs', response_model=JobSubmitResponse)
+def submit_job(req: SimulationRequest) -> JobSubmitResponse:
+    task = run_simulation_task.delay(req.model_dump(mode='json'))
+    return JobSubmitResponse(job_id=task.id)
+
+
+@app.get('/jobs/{job_id}', response_model=JobStatusResponse)
+def get_job(job_id: str) -> JobStatusResponse:
+    result = AsyncResult(job_id)
+    status = _STATE_MAP.get(result.state, 'pending')
+
+    if result.state == 'SUCCESS':
+        return JobStatusResponse(
+            job_id=job_id,
+            status='completed',
+            result=SimulationResult(**result.result),
+        )
+    if result.state == 'FAILURE':
+        return JobStatusResponse(
+            job_id=job_id,
+            status='failed',
+            error=str(result.result),
+        )
+
+    return JobStatusResponse(job_id=job_id, status=status)
