@@ -9,7 +9,6 @@ Sentinel's Monte Carlo simulation currently runs synchronously — the HTTP conn
 - Restructure backend: `runtime/` splits into `services/` + `pipelines/`
 - Celery integration with Redis broker
 - New async job API (`POST /jobs`, `GET /jobs/{id}`) replacing sync `POST /simulate`
-- Job state management in Redis
 - Docker Compose for API + worker + Redis
 - Frontend update to submit + poll
 
@@ -17,7 +16,7 @@ Sentinel's Monte Carlo simulation currently runs synchronously — the HTTP conn
 
 ```
 backend/
-├── celery.py              # Celery app config (Redis broker)
+├── celery.py              # Celery app config (Redis broker + result backend)
 ├── api/
 │   ├── main.py            # POST /jobs, GET /jobs/{id}, GET /health
 │   └── schemas.py         # + JobSubmitResponse, JobStatusResponse
@@ -25,50 +24,53 @@ backend/
 ├── pipelines/
 │   └── simulate.py        # moved from runtime/simulate.py
 ├── services/
-│   ├── cache.py           # moved from runtime/cache.py, env var for Redis URL
-│   └── jobs.py            # job state management in Redis
-├── tasks/
-│   └── simulate.py        # Celery task wrapping pipelines/simulate.py
-└── worker/
-    └── config.py          # Worker tuning params
+│   └── cache.py           # moved from runtime/cache.py, env var for Redis URL
+└── tasks/
+    └── simulate.py        # Celery task wrapping pipelines/simulate.py
 ```
+
+## Redis Database Layout
+
+- DB 0: Celery broker (task queue)
+- DB 1: Celery result backend (task state + results)
+- DB 2: price cache (`services/cache.py`)
 
 ## Celery Configuration
 
 - Broker: Redis DB 0 (`REDIS_URL` env var, defaults to `redis://localhost:6379`)
-- Result backend: Redis DB 1
+- Result backend: Redis DB 1 — single source of truth for job state
 - JSON serialization for tasks
 - `task_track_started=True` to distinguish pending vs running
 - `task_acks_late=True` to prevent task loss on worker crash
-- `worker_prefetch_multiplier=1` (one task at a time per process)
-- `result_expires=3600` (1 hour)
+- `worker_prefetch_multiplier=1` (one task at a time per worker process)
+- `worker_concurrency=2` (max 2 simultaneous simulations; leaves CPU cores free for local dev)
+- `worker_max_tasks_per_child=50` (restart worker process after 50 tasks; prevents numpy/pandas memory accumulation)
+- No TTL on results — app is ephemeral by design; results only need to outlive the current browser session
 
 ## Job Lifecycle
 
 ```
 POST /jobs (SimulationRequest)
   → enqueue Celery task
-  → create job record in Redis (status: pending)
-  → return { job_id }
+  → return { job_id } immediately
 
 Worker picks up task:
-  → update job status to "running"
-  → call run_simulation() from pipelines/simulate.py
-  → on success: store result, update status to "completed"
-  → on failure: store error message, update status to "failed"
+  → Celery automatically marks task as STARTED
+  → run_simulation() executes
+  → Celery automatically stores result and marks SUCCESS
+  → on exception: Celery stores error and marks FAILURE
 
 GET /jobs/{id}
+  → query AsyncResult(job_id) from Celery result backend
+  → map Celery states to API states
   → return { job_id, status, result?, error? }
 ```
 
-**Job states:** `pending` → `running` → `completed` | `failed`
-
-## Job State Management (`services/jobs.py`)
-
-- Redis keys prefixed with `job:` (separate from `prices:` cache keys and Celery internal keys)
-- Jobs stored as JSON strings with 1-hour TTL
-- Three functions: `create_job()`, `update_job()`, `get_job()`
-- Uses `decode_responses=True` (JSON mode), separate client from the pickle-based cache
+**Celery → API state mapping:**
+- `PENDING` → `pending`
+- `STARTED` → `running`
+- `SUCCESS` → `completed`
+- `FAILURE` → `failed`
 
 ## API Endpoints
 
@@ -91,7 +93,6 @@ Response:
   "result": { "metrics": {...}, "projection": {...} } | null,
   "error": "error message" | null
 }
-
 ```
 
 The `result` field reuses the existing `SimulationResponse` schema. Populated only when status is `completed`.
@@ -102,15 +103,13 @@ Unchanged.
 
 ## Celery Task (`tasks/simulate.py`)
 
-Thin wrapper:
-1. Updates job status to `running`
-2. Reconstructs `SimulationRequest` from the dict params
-3. Calls `run_simulation(req)` (same function as today, just moved to `pipelines/`)
-4. Converts result to dict via `model_dump()`
-5. Stores result and updates job to `completed`
-6. On exception: stores error string, updates to `failed`, re-raises
+Thin wrapper — Celery handles all state management automatically:
+1. Reconstruct `SimulationRequest` from the dict params
+2. Call `run_simulation(req)`
+3. Return result dict via `model_dump()` — Celery stores it on SUCCESS
+4. On exception: Celery records the error and marks FAILURE automatically
 
-Uses `bind=True` to access `self.request.id` as the job ID (Celery's auto-generated UUID).
+No manual state updates needed.
 
 ## Docker Compose
 
@@ -127,7 +126,7 @@ Single `Dockerfile` (Python 3.12-slim), three services:
 - `redis_data` volume for persistence
 - Frontend not containerized (runs via `npm run dev`)
 
-`cache.py` updated to read `REDIS_URL` from environment (replaces hardcoded localhost).
+`cache.py` updated to read `REDIS_URL` from environment and use DB 2.
 
 ## Frontend Changes
 
@@ -142,10 +141,10 @@ The `/monte-carlo` page switches from sync fetch to submit + poll:
 
 ## Implementation Order
 
-1. **Restructure directories** — move files, update imports, verify existing functionality works
-2. **Add Celery infrastructure** — celery.py, services/jobs.py, tasks/simulate.py, worker/config.py
+1. **Restructure directories** — move files, update imports ✅
+2. **Add Celery infrastructure** — celery.py, tasks/simulate.py, worker/config.py
 3. **New API endpoints** — replace /simulate with /jobs and /jobs/{id}
-4. **Update cache.py** — env var for Redis URL
+4. **Update cache.py** — env var for Redis URL, switch to DB 2
 5. **Docker setup** — Dockerfile + docker-compose.yml
 6. **Frontend update** — submit + poll pattern
 
