@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import PathChart from "./PathChart";
 
 interface Position {
@@ -54,6 +54,12 @@ export default function MonteCarloPage() {
   const [metrics, setMetrics] = useState<MetricsResult | null>(null);
   const [projection, setProjection] = useState<ProjectionResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [jobStatus, setJobStatus] = useState<"idle" | "pending" | "running" | "completed" | "failed">("idle");
+  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => { if (pollRef.current) clearTimeout(pollRef.current); };
+  }, []);
   const [params, setParams] = useState<SimulationParams>({
     start: "2022-01-01",
     end: "2026-01-01",
@@ -107,13 +113,15 @@ export default function MonteCarloPage() {
 
   const runSimulation = async () => {
     setLoading(true);
+    setJobStatus("pending");
     setMetrics(null);
     setProjection(null);
-    const tickers = positions.map(p => p.symbol)
-    const weights = positions.map(p => p.allocation / 100)
+
+    const tickers = positions.map(p => p.symbol);
+    const weights = positions.map(p => p.allocation / 100);
 
     try {
-      const res = await fetch("http://localhost:8000/simulate", {
+      const submitRes = await fetch("http://localhost:8000/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -129,12 +137,29 @@ export default function MonteCarloPage() {
           n_samples: parseInt(params.nSamples),
           include: ["metrics", "projection"],
         }),
-      })
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail ?? "Simulation failed");
-      setMetrics(data.metrics);
-      if (data.projection) setProjection(data.projection);
-    } finally {
+      });
+      if (!submitRes.ok) throw new Error("Failed to submit job");
+      const { job_id } = await submitRes.json();
+
+      const poll = async () => {
+        const statusRes = await fetch(`http://localhost:8000/jobs/${job_id}`);
+        const data = await statusRes.json();
+        setJobStatus(data.status);
+
+        if (data.status === "completed") {
+          setMetrics(data.result.metrics);
+          if (data.result.projection) setProjection(data.result.projection);
+          setLoading(false);
+        } else if (data.status === "failed") {
+          setLoading(false);
+        } else {
+          pollRef.current = setTimeout(poll, 1000);
+        }
+      };
+
+      poll();
+    } catch {
+      setJobStatus("failed");
       setLoading(false);
     }
   };
@@ -343,7 +368,7 @@ export default function MonteCarloPage() {
             disabled={!canRunSimulation || loading}
             className="px-6 py-3 bg-neutral-100 text-neutral-900 transition-all hover:scale-101 hover:bg-green-100 disabled:opacity-30 disabled:cursor-not-allowed rounded font-medium cursor-pointer active:scale-99"
           >
-            {loading ? "Running..." : "Run Monte Carlo Simulation"}
+            {jobStatus === "pending" ? "Queued..." : jobStatus === "running" ? "Simulating..." : "Run Monte Carlo Simulation"}
           </button>
           
           {!canRunSimulation && positions.length > 0 && (

@@ -1,9 +1,9 @@
 import logging
-from celery.result import AsyncResult
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .schemas import SimulationRequest, SimulationResult, JobSubmitResponse, JobStatusResponse
+from ..celery import app as celery_app
 from ..tasks.simulate import run_simulation_task
 
 logging.basicConfig(level=logging.WARNING)
@@ -40,7 +40,7 @@ def submit_job(req: SimulationRequest) -> JobSubmitResponse:
 
 @app.get('/jobs/{job_id}', response_model=JobStatusResponse)
 def get_job(job_id: str) -> JobStatusResponse:
-    result = AsyncResult(job_id)
+    result = celery_app.AsyncResult(job_id)
     status = _STATE_MAP.get(result.state, 'pending')
 
     if result.state == 'SUCCESS':
