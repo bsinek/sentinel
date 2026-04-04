@@ -1,3 +1,4 @@
+import os
 import logging
 import pickle
 import redis
@@ -7,7 +8,9 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_TTL = 86400     # 1 day
 
-_redis = redis.Redis(host='localhost', port=6379, socket_connect_timeout=1, socket_timeout=0.1, retry_on_timeout=True)
+REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379')
+
+_redis = redis.Redis.from_url(url=f'{REDIS_URL}/2', socket_connect_timeout=1, socket_timeout=0.1, retry_on_timeout=True)
 
 
 def get(key: str) -> Any | None:
