@@ -100,32 +100,19 @@ drawdowns    = (close - rolling_max) / close
 
 ## Parameter Decisions
 
-### Chosen config (BIC grid search winner, 2018–2026 data)
+### Chosen config (literature-validated)
 ```python
-vol_window      = 20   # log return std over 20 days
+vol_window      = 20   # log return std over 20 days — Guidolin & Timmermann (2007)
 drawdown_window = 60   # rolling max over 60 days (~1 quarter)
-n_components    = 4    # number of hidden states
+n_components    = 4    # 4 states per Guidolin & Timmermann (2007)
 feature_cols    = ['log_return', 'rolling_vol', 'drawdown']
 ```
 
-### Grid search setup
-- Searched: `sma_window ∈ [1,5,10,20]`, `vol_window ∈ [5,10,20]`, `dd_window ∈ [30,45,60]`, `n_components ∈ [3,4]`
-- Metric: BIC (lower = better)
-- `sma_window=1` = raw log return (same thing, different name)
-- Grid search consistently favored `vol_window=20`, `dd_window=60`
+Parameters are fixed from the literature, not grid-searched. BIC grid search was explored but removed for two reasons:
+- BIC assumes IID observations; HMM data is sequential, so effective sample size < n, causing BIC to overestimate optimal `n_components`
+- BIC rewards smoother features (tighter Gaussians) as a statistical artifact — it consistently preferred `sma_window=20` despite SMA causing fragmentation in practice
 
-### BIC formula (correct)
-```python
-n_features = X.shape[1]
-k = nc * (nc - 1) + nc * n_features + nc * n_features * (n_features + 1) // 2
-n = len(X_scaled)
-ll = model.score(X_scaled)  # already total LL, not per-sample
-bic = k * np.log(n) - 2 * ll
-```
-
-**Common bug:** `model.score()` returns total log-likelihood. Do not multiply by `n` again.
-
-**BIC limitation:** Assumes IID observations. HMM data is sequential/correlated, so effective sample size < n. BIC tends to slightly overestimate optimal n_components. Use domain knowledge to constrain n_components to [3, 4] and let BIC choose windows only.
+Grid search on `vol_window` consistently returned `vol_window=20, dd_window=60`, which matches the literature. No reason to grid-search what the papers already tell you.
 
 ---
 
@@ -136,11 +123,23 @@ Based on inverse-transformed `model.means_`:
 | State | return | vol | drawdown | Label |
 |-------|--------|-----|----------|-------|
 | Bull | highest positive | lowest | near zero | Steady uptrend, near ATH |
-| Chop | mildly negative | moderate | moderate | Directionless, no trend |
+| Correction | mildly negative | moderate | moderate | Directionless or shallow pullback |
 | Recovery | high positive | moderate | mild | Sharp bounce off bottom |
 | Bear | negative | highest | deep (-13%+) | Sustained drawdown |
 
-**State numbers shuffle across runs.** Always re-derive labels from `model.means_` after fitting. Use `scaler.inverse_transform(model.means_)` to get values in original feature space.
+**State numbers shuffle across runs.** Always re-derive labels from `model.means_` after fitting. Labels are assigned by ranking drawdown depth — most negative drawdown = Bear, least negative = Bull. This is done via `get_label_map()`:
+
+```python
+def get_label_map(model_means, scaler, feature_cols) -> dict:
+    regime_means = pd.DataFrame(scaler.inverse_transform(model_means), columns=feature_cols)
+    sorted_labels = regime_means['drawdown'].argsort()
+    return {
+        sorted_labels.iloc[0]: 'Bear',
+        sorted_labels.iloc[1]: 'Correction',
+        sorted_labels.iloc[2]: 'Recovery',
+        sorted_labels.iloc[3]: 'Bull',
+    }
+```
 
 ### Transition matrix interpretation
 A well-fitted model shows near-diagonal transitions (high self-persistence) and sequential neighbor transitions. States should not jump directly from Bull to Bear or vice versa — they should transition through intermediate states. If you see Bull ↔ Bear direct transitions at >5%, the model is likely unstable or overparameterized.
@@ -168,6 +167,7 @@ A well-fitted model shows near-diagonal transitions (high self-persistence) and 
 | `n_components=5` | States 0 and 1 averaged 3–5 days each. BIC formula was also buggy (hardcoded 3 instead of nc). Even after fix, 5 states produced indistinguishable near-ATH sub-states |
 | `vol_window=5` | Too reactive — short-term vol spikes caused frequent false regime switches in bull periods |
 | BIC with unconstrained n_components | BIC underpenalizes higher component models for sequential data. Always fix n_components based on domain knowledge (3 or 4), use BIC for window selection only |
+| BIC grid search over vol/dd windows | BIC rewards smoother features as an artifact (tighter Gaussians = lower BIC). When sma_windows included, BIC picks the longest SMA — a statistical artifact, not signal. Grid search removed; parameters fixed from Guidolin & Timmermann (2007) instead |
 
 ---
 
@@ -186,15 +186,88 @@ For live deployment:
 
 ---
 
+---
+
+## Soft Probabilities
+
+`model.predict_proba(X_scaled)` returns a (T, 4) matrix — probability of each regime at each timestep. This is more useful than hard labels for trading because:
+- Regime transitions are gradual, not instantaneous
+- A position sized by `P(Bull) + P(Recovery)` avoids cliff edges at state boundaries
+- Soft probabilities can be used as a continuous risk signal
+
+For visualization, smooth with a 10-day rolling mean before plotting as a stacked area chart. The smoothing is display-only — do not smooth before feeding to the model or backtest.
+
+**Continuous position sizing:**
+```python
+bullish_prob = proba_smooth['Bull'] + proba_smooth['Recovery']
+# use as position multiplier: 0 (full cash) to 1 (full long)
+```
+
+---
+
+## Walk-Forward Validation
+
+Fit on 2016–2021 (pre-2022), predict on 2022–2026. Scaler fit on train only.
+
+```python
+split_date = '2022-01-01'
+feat_train = features[features.index < split_date]
+feat_test  = features[features.index >= split_date]
+scaler_wf  = StandardScaler()
+X_train    = scaler_wf.fit_transform(feat_train)
+X_test     = scaler_wf.transform(feat_test)       # transform only, no fit
+model_wf   = GaussianHMM(n_components=4, covariance_type='full', n_iter=1000, random_state=42)
+model_wf.fit(X_train)
+```
+
+Purpose: confirm that regime structure detected in-sample generalizes to unseen data. If the out-of-sample regimes match the qualitative structure (COVID → Bear, 2021 → Bull, 2022 drawdown → Bear), the model is stable.
+
+**Known issue:** Bull/Recovery oscillation on daily data. The model alternates between these two states during sustained uptrends. This is a state separation problem — on monthly data (as in the literature) the distinction is cleaner. Solutions: merge to 3 states, use soft probabilities as continuous signal, or use Statistical Jump Model. Evaluate impact via backtest before addressing.
+
+---
+
+## Backtest (Out-of-Sample, 2022–2026)
+
+Backtest uses `test_regimes` from walk-forward — no data leakage.
+
+### Version 1 — Binary Long/Cash
+
+```python
+spy_returns = close_prices.loc[feat_test.index].pct_change()
+position    = test_regimes.map({'Bull': 1.0, 'Recovery': 1.0, 'Correction': 0.0, 'Bear': 0.0})
+
+# position set at close of day d, applied to return of day d+1
+strategy_returns  = (position.shift(1) * spy_returns).dropna()
+benchmark_returns = spy_returns.dropna()
+```
+
+**Metrics:** total return, annualized Sharpe, max drawdown — compared to buy-and-hold.
+
+**Why cash, not short:** The model was not trained to time short entries. Cash avoids being wrong in two directions; shorting doubles the risk of misclassification. Short could be added as a separate signal once the model is validated.
+
+### Version 2 — Soft Probability Sizing (refinement)
+
+```python
+bullish_prob     = proba_wf_smooth['Bull'] + proba_wf_smooth['Recovery']
+strategy_soft    = (bullish_prob.shift(1) * spy_returns).dropna()
+```
+
+Removes cliff edges at transition points. Use this after Version 1 is validated.
+
+---
+
 ## Notebook Location
 
 `research/hmm.ipynb`
 
 Cell order:
 1. Imports
-2. Data loading (`close_prices`)
-3. Grid search (BIC over window params)
-4. Feature engineering
-5. HMM fit + predict
-6. Regime interpretation (`model.means_`, transition matrix)
-7. Duration analysis + visualization
+2. Data loading (`close_prices`, 2016–2026)
+3. Feature engineering (`log_return`, `rolling_vol`, `drawdown`)
+4. Markdown — 4-state rationale + BIC limitation note
+5. `get_label_map()` helper + palette
+6. HMM fit + label + regime stats
+7. Duration analysis + hard label visualization
+8. Soft probability visualization
+9. Walk-forward validation (fit pre-2022, predict 2022–2026, hard + soft charts)
+10. Backtest (out-of-sample performance vs buy-and-hold)
