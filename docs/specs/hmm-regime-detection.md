@@ -176,32 +176,27 @@ A well-fitted model shows near-diagonal transitions (high self-persistence) and 
 The regime signal is useful for **portfolio-level risk management and position sizing**, not intraday timing:
 
 - **Bull + Recovery** → full position / long bias
-- **Chop** → reduce size, wait for trend
+- **Correction** → reduce size or hold cash
 - **Bear** → defensive, hedge, or flat
 
 For live deployment:
-1. Use `model.predict_proba(X)` for soft regime probabilities (more useful than hard labels)
+1. Use hard regime labels for position sizing — outperforms soft probabilities when model confidence is high
 2. Re-fit on expanding window monthly or quarterly
 3. Track regime transition probability as a risk signal
 
 ---
 
----
-
 ## Soft Probabilities
 
-`model.predict_proba(X_scaled)` returns a (T, 4) matrix — probability of each regime at each timestep. This is more useful than hard labels for trading because:
-- Regime transitions are gradual, not instantaneous
-- A position sized by `P(Bull) + P(Recovery)` avoids cliff edges at state boundaries
-- Soft probabilities can be used as a continuous risk signal
+`model.predict_proba(X_scaled)` returns a (T, 4) matrix — probability of each regime at each timestep.
 
 For visualization, smooth with a 10-day rolling mean before plotting as a stacked area chart. The smoothing is display-only — do not smooth before feeding to the model or backtest.
 
-**Continuous position sizing:**
+**Continuous position sizing (tested, found inferior):**
 ```python
-bullish_prob = proba_smooth['Bull'] + proba_smooth['Recovery']
-# use as position multiplier: 0 (full cash) to 1 (full long)
+bullish_prob = proba_wf_smooth['Bull'] + proba_wf_smooth['Recovery']
 ```
+Backtested against hard labels on 2022–2026. Soft sizing produced Sharpe 0.91 vs hard labels 1.22. Reason: the model is high-confidence (transition matrix diagonal >0.90), so soft probabilities systematically underinvest during bull periods and take on small losses during bear periods. Hard labels are cleaner. Soft sizing would only add value if regime confidence were lower.
 
 ---
 
