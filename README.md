@@ -43,13 +43,15 @@ sentinel/
 │   └── app/monte-carlo/   # Monte Carlo page + PathChart
 ├── research/         # Jupyter notebooks
 │   ├── monte_carlo.ipynb
-│   └── hmm.ipynb
+│   ├── hmm.ipynb
+│   └── vrp_tail_v2.ipynb
 ├── docs/
 │   ├── PROJECT.md         # Vision, research domains, north star
 │   ├── ARCHITECTURE.md    # Stack, layers, DAG design
 │   ├── DECISIONS.md       # Key choices and trade-offs
 │   ├── ROADMAP.md         # What's done, what's next
-│   └── specs/             # Research specs (HMM, Celery integration)
+│   ├── audits/            # Adversarial audits of research + platform
+│   └── specs/             # Research specs (VRP, HMM, Celery integration)
 ├── docker-compose.yml
 ├── Dockerfile
 ├── CLAUDE.md
@@ -57,6 +59,18 @@ sentinel/
 ```
 
 ## Research
+
+### Variance Risk Premium — Tail-Conditional Entry
+
+Does information available at entry reduce the *left tail* of short-variance payoffs, and at what cost in premium? The traded object is a synthetic 30-day variance swap: the seller locks VIX² as the strike and settles against realized variance over the following 21 trading days, so both legs share one horizon and the payoff approximates a real instrument's settlement.
+
+**Rule selected entirely on 1993–2009 — windows, threshold, and ranking — then evaluated once on 2010–2026 (n = 4,148 entries):** standing aside when short-window realized vol runs hot against its longer-run baseline cut CVaR-5% by **32.9%** while retaining **96.7%** of premium, lifting **Sharpe from 0.57 to 1.29** (non-overlapping entries, constant collateral). Reaching the same tail risk by trading smaller instead would cost 44% of P&L. Block bootstrap: P(tail cut > 0) = 98.1%. The mean-payoff improvement is *not* significant — the supported claim is tail reduction at approximately zero premium cost, not alpha.
+
+Rate-of-change filters outranked volatility-*level* filters, which outranked premium-*forecast* filters (including ARMA), consistently across specifications.
+
+- Full analysis: [`research/vrp_tail_v2.ipynb`](research/vrp_tail_v2.ipynb)
+- Research spec (design decisions, robustness sweep, known gotchas): [`docs/specs/vrp-tail-v2.md`](docs/specs/vrp-tail-v2.md)
+- Superseded v1 and the adversarial audits that prompted the rebuild: [`research/vrp_arma_signal.ipynb`](research/vrp_arma_signal.ipynb), [`docs/audits/`](docs/audits/)
 
 ### HMM Regime Detection
 
