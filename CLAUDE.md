@@ -33,7 +33,14 @@ Examples:
 - `feat(engine): add GBM simulation module`
 - `fix(cache): handle Redis connection timeout`
 - `docs(claude): add subagent usage rule`
-- `refactor(runtime): extract orchestration logic to runtime layer`
+- `refactor(pipelines): extract orchestration logic out of the API layer`
+
+Message bodies:
+- Bullets, never paragraphs.
+- One line per bullet. Never hard-wrap — renderers preserve the newline, so a wrapped bullet displays as an orphaned fragment. Let the viewer wrap.
+- Lowercase and terse. Pack related facts into one bullet with semicolons rather than splitting them.
+- Lead the finding with `result:`.
+- No em dashes.
 
 ## Backend Conventions
 
