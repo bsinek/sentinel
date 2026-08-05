@@ -12,7 +12,7 @@ Sentinel is a graph-based quant research and strategy engineering platform. Inst
 
 **Working MVP — Monte Carlo GBM simulation:** portfolio construction UI, async FastAPI job queue, Celery workers, modular compute engine, SVG visualization with confidence bands and risk metrics.
 
-**Active research — HMM regime detection:** 4-state Hidden Markov Model on SPY, walk-forward validation, out-of-sample backtest against buy-and-hold (see [Research](#research)).
+**Active research — HMM regime detection:** 4-state Hidden Markov Model on SPY, walk-forward validation, causally-decoded out-of-sample backtest against buy-and-hold (see [Research](#research)).
 
 The DAG execution engine is the target architecture but not yet implemented. Engine modules are structured as independent functions with typed inputs/outputs, ready for DAG integration.
 
@@ -78,12 +78,14 @@ Rate-of-change filters outranked volatility-*level* filters, which outranked pre
 
 ![HMM regime labels over SPY](docs/assets/hmm-regimes.png)
 
-**Walk-forward backtest (2022–2026, out-of-sample):** regime signal drives a binary long/cash position on SPY. Fit on 2016–2021, evaluated on unseen 2022–2026 data.
+**Walk-forward backtest (2022–2026, out-of-sample):** regime signal drives a binary long/cash position on SPY. Fit on 2016–2021, evaluated on unseen 2022–2026 data. Regimes are decoded **causally** — each day's state is inferred from data up to that day only, rather than by running Viterbi or forward-backward over the whole test block, which would condition every label on its own future.
 
 ![HMM backtest vs buy-and-hold](docs/assets/hmm-backtest.png)
 
+**Sharpe 0.92 vs 0.66 buy-and-hold, max drawdown −10.9% vs −24.5%, at a cost in total return (31.1% vs 50.9%).** The defensible claim is drawdown reduction, not outperformance: over ~4 years the Sharpe gap is inside one standard error, one avoided bear market drives it, and no transaction costs are modeled. An earlier version of this backtest reported Sharpe 1.22 / −6.4% drawdown using full-block Viterbi decoding — that result was anticipative and is superseded.
+
 - Full analysis: [`research/hmm.ipynb`](research/hmm.ipynb)
-- Research spec (literature review, feature rationale, failure modes): [`docs/specs/hmm-regime-detection.md`](docs/specs/hmm-regime-detection.md)
+- Research spec (literature review, feature rationale, failure modes, superseded results): [`docs/specs/hmm-regime-detection.md`](docs/specs/hmm-regime-detection.md)
 
 ### Monte Carlo Exploration
 

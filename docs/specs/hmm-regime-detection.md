@@ -188,21 +188,31 @@ For live deployment:
 
 ## Soft Probabilities
 
-`model.predict_proba(X_scaled)` returns a (T, 4) matrix — probability of each regime at each timestep.
+`model.predict_proba(X)` returns a (T, 4) matrix — probability of each regime at each timestep. Note that on a full sequence these are *smoothed* posteriors and are not causal; see Walk-Forward Validation for the filtered version used in any backtest.
 
 For visualization, smooth with a 10-day rolling mean before plotting as a stacked area chart. The smoothing is display-only — do not smooth before feeding to the model or backtest.
 
-**Continuous position sizing (tested, found inferior):**
+**Continuous position sizing (tested, ties the binary rule):**
 ```python
-bullish_prob = proba_wf_smooth['Bull'] + proba_wf_smooth['Recovery']
+bullish_prob = proba_wf_df['Bull'] + proba_wf_df['Recovery']   # filtered, unsmoothed
 ```
-Backtested against hard labels on 2022–2026. Soft sizing produced Sharpe 0.91 vs hard labels 1.22. Reason: the model is high-confidence (transition matrix diagonal >0.90), so soft probabilities systematically underinvest during bull periods and take on small losses during bear periods. Hard labels are cleaner. Soft sizing would only add value if regime confidence were lower.
+Backtested against hard labels on 2022–2026, both on filtered posteriors (2026-08-05 re-run): soft Sharpe 0.92 / MaxDD −9.85% / total 30.78% vs hard 0.92 / −10.94% / 31.10%. The two are effectively tied, with soft giving up a little return for a slightly shallower drawdown — consistent with a high-confidence model (transition diagonal >0.90) whose posteriors sit near 0 or 1 most days, leaving little room for sizing to differ from a binary rule.
+
+Supersedes an earlier claim that soft sizing was inferior (Sharpe 0.91 vs 1.22). That comparison was confounded twice over: the hard variant used leaked full-block Viterbi labels while the soft variant used *smoothed* posteriors, violating this spec's own display-only rule above.
 
 ---
 
 ## Walk-Forward Validation
 
-Fit on 2016–2021 (pre-2022), predict on 2022–2026. Scaler fit on train only.
+Fit on 2016–2021 (pre-2022), decode 2022–2026. Scaler fit on train only.
+
+The train/test split closes *parameter* leakage but not *inference* leakage. hmmlearn's `predict()` runs Viterbi ("the most likely sequence of states, given all emissions") and `predict_proba()` runs forward-backward, forming posteriors as `fwdlattice + bwdlattice` where the backward term is P(observations after *t* | state at *t*) (`hmmlearn/base.py`). Passing either the whole test block lets a label borrow evidence from its own future. Regimes are therefore decoded causally — at each *t*, only `X_test[:t+1]` is visible:
+
+```python
+def filtered_posteriors(model, X):
+    # last row of predict_proba on a prefix has beta_t = 1 -> filtered, not smoothed
+    return np.vstack([model.predict_proba(X[:t + 1])[-1] for t in range(len(X))])
+```
 
 ```python
 split_date = '2022-01-01'
@@ -223,7 +233,25 @@ Purpose: confirm that regime structure detected in-sample generalizes to unseen 
 
 ## Backtest (Out-of-Sample, 2022–2026)
 
-Backtest uses `test_regimes` from walk-forward — no data leakage.
+Backtest uses `test_regimes` from walk-forward, decoded causally (see Walk-Forward Validation above). Parameters are fit on train only *and* each day's regime is inferred from data up to that day only.
+
+**Results (2026-08-05 re-run, filtered decoding):**
+
+| | Strategy | Buy-and-hold |
+|---|---|---|
+| Total return | 31.10% | 50.91% |
+| Sharpe (rf = 0) | 0.92 | 0.66 |
+| Max drawdown | −10.94% | −24.47% |
+
+Supported claim: the regime filter roughly halves drawdown and raises risk-adjusted return, at a real cost in total return. Not supported: that it beats buy-and-hold outright, or that the Sharpe gap is statistically distinguishable — over ~4 years SE(annualized Sharpe) ≈ 0.5, so 0.92 vs 0.66 is inside noise, and one avoided bear market drives the result.
+
+**Cost sensitivity (2026-08-05):** the binary rule makes 22 position round-trips over the 4-year test window, so costs are close to irrelevant — Sharpe 0.92 → 0.90 → 0.88 → 0.84 at 0 / 2 / 5 / 10 bps per switch (total return 31.10% → 28.22% at 10 bps). Filtered decoding does flicker more than Viterbi, which enforces a globally coherent path: 76 label switches vs 65. That does not translate into more trading here because Bull and Recovery both map to a 1.0 position.
+
+**Still not modeled:** cash is credited at 0% through a 4–5% bill era (this understates the strategy, which sits ~51% in cash, while the rf = 0 Sharpe overstates it — two offsetting distortions, neither quantified); expanding refits (the model is fit once on 2016–2021 and never updated); multi-restart EM (single seed 42).
+
+### Prior result, superseded
+
+An earlier version of this backtest reported Sharpe 1.22 / max drawdown −6.42% / total return 43.32%. Those numbers came from `model_wf.predict(X_test)` on the whole test block — Viterbi over the full sequence, which conditions each day's label on later days (audit finding H-C1). Verified by execution: full-block and causal decoding disagree on 61 of 1003 test days, clustered on regime turns; 2022-01-05 flips from Recovery to Correction as soon as one later day enters the window, which is what put the leaked version in cash at the exact market top.
 
 ### Version 1 — Binary Long/Cash
 
@@ -243,7 +271,7 @@ benchmark_returns = spy_returns.dropna()
 ### Version 2 — Soft Probability Sizing (refinement)
 
 ```python
-bullish_prob     = proba_wf_smooth['Bull'] + proba_wf_smooth['Recovery']
+bullish_prob     = proba_wf_df['Bull'] + proba_wf_df['Recovery']   # filtered, unsmoothed
 strategy_soft    = (bullish_prob.shift(1) * spy_returns).dropna()
 ```
 
